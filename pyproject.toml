@@ -1,0 +1,26 @@
+[project]
+name = "pi-mcp-ocr"
+version = "1.0.0"
+description = "Modular OCR MCP server with Vision, PaddleOCR, and PaddleOCR-VL backends"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "mcp[cli]>=1.9",
+]
+
+[project.optional-dependencies]
+vision = ["pyobjc-framework-Vision", "pyobjc-framework-Quartz"]
+paddle = ["paddleocr>=2.10", "paddlepaddle>=3.3.1"]
+paddleocr-vl = []  # runtime dep: paddleocr-vl Swift CLI, no Python deps
+all = [
+    "pi-mcp-ocr[vision,paddle,paddleocr-vl]",
+]
+
+[project.scripts]
+mcp-ocr = "mcp_ocr.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mcp_ocr"]
