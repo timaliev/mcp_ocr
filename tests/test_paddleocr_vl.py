@@ -1,10 +1,15 @@
 import pytest
 import sys
 import os
+import shutil
+
+def _has_cli():
+    """Check if paddleocr-vl CLI binary is available."""
+    return shutil.which("paddleocr-vl") is not None or os.environ.get("PADDLEOCR_VL_BIN", "")
 
 pytestmark = pytest.mark.skipif(
-    sys.platform != "darwin" or os.uname().machine != "arm64",
-    reason="PaddleOCR-VL requires Apple Silicon"
+    sys.platform != "darwin" or os.uname().machine != "arm64" or not _has_cli(),
+    reason="PaddleOCR-VL requires Apple Silicon + paddleocr-vl CLI"
 )
 
 from mcp_ocr.backends.paddleocr_vl import PaddleOCRVlBackend
