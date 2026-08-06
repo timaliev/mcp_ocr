@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [unreleased]
+## [1.0.1](https://github.com/timaliev/mcp_ocr/compare/v1.0.0..v1.0.1) - 2026-08-06
 
 ### Bug Fixes
 
