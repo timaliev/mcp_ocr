@@ -4,7 +4,7 @@
 
 **Goal:** Refactor mcp_ocr into class-based modular backends (Vision, Paddle, PaddleOCR-VL) with per-task×backend named MCP tools.
 
-**Architecture:** Each backend is a class implementing `BaseOCRBackend` ABC in `backends/`. `server.py` reads the `BACKENDS` registry, dynamically registers `ocr_{task}_{name}` tools via `@server.tool()`. PaddleOCR-VL backend shells out to the Swift CLI binary.
+**Architecture:** Each backend is a class implementing `BaseOCRBackend` ABC in `mcp_ocr/backends/`. `mcp_ocr/server.py` reads the `BACKENDS` registry, dynamically registers `ocr_{task}_{name}` tools via `@server.tool()`. PaddleOCR-VL backend shells out to the Swift CLI binary.
 
 **Tech Stack:** Python 3.11+, `mcp[cli]>=1.9`, PyObjC (Vision), PaddleOCR (cross-platform), subprocess (PaddleOCR-VL Swift CLI), pytest
 
@@ -21,16 +21,19 @@
 
 ---
 
+Package lives under `mcp_ocr/` directory (per `pyproject.toml` packages = ["mcp_ocr"]).
+
 ## File Structure
 
 | File | Responsibility |
 |------|---------------|
-| `backends/base.py` | `BaseOCRBackend` ABC with `extract`, `layout`, `table`, `formula`, `chart` |
-| `backends/__init__.py` | `BACKENDS` registry dict, `get_backend()` lookup |
-| `backends/vision.py` | `VisionBackend` — PyObjC Apple Vision integration |
-| `backends/paddle.py` | `PaddleBackend` — PaddleOCR CPU integration |
-| `backends/paddleocr_vl.py` | `PaddleOCRVlBackend` — subprocess → Swift CLI |
-| `server.py` | Dynamic tool registration, `@handle_errors` decorator, batch routing, `main()` |
+| `mcp_ocr/__init__.py` | Package init |
+| `mcp_ocr/backends/base.py` | `BaseOCRBackend` ABC with `extract`, `layout`, `table`, `formula`, `chart` |
+| `mcp_ocr/backends/__init__.py` | `BACKENDS` registry dict, `get_backend()` lookup |
+| `mcp_ocr/backends/vision.py` | `VisionBackend` — PyObjC Apple Vision integration |
+| `mcp_ocr/backends/paddle.py` | `PaddleBackend` — PaddleOCR CPU integration |
+| `mcp_ocr/backends/paddleocr_vl.py` | `PaddleOCRVlBackend` — subprocess → Swift CLI |
+| `mcp_ocr/server.py` | Dynamic tool registration, `@handle_errors` decorator, batch routing, `main()` |
 | `pyproject.toml` | Package metadata, optional dependency groups, console_scripts |
 | `tests/test_base.py` | Tests for ABC, registry, error handling decorator |
 | `tests/test_vision.py` | Vision backend tests (macOS only) |
@@ -45,18 +48,19 @@
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `backends/__init__.py`
-- Create: `backends/base.py` (empty ABC skeleton)
-- Create: `backends/vision.py` (empty placeholder)
-- Create: `backends/paddle.py` (empty placeholder)
-- Create: `backends/paddleocr_vl.py` (empty placeholder)
-- Create: `server.py` (empty placeholder)
+- Create: `mcp_ocr/__init__.py`
+- Create: `mcp_ocr/backends/__init__.py`
+- Create: `mcp_ocr/backends/base.py` (empty ABC skeleton)
+- Create: `mcp_ocr/backends/vision.py` (empty placeholder)
+- Create: `mcp_ocr/backends/paddle.py` (empty placeholder)
+- Create: `mcp_ocr/backends/paddleocr_vl.py` (empty placeholder)
+- Create: `mcp_ocr/server.py` (empty placeholder)
 - Create: `tests/__init__.py`
 - Create: `tests/test_base.py` (empty placeholder)
 - Create: `.gitignore`
 
 **Interfaces:**
-- Produces: `backends.base.BaseOCRBackend` ABC (skeleton), `backends` package
+- Produces: `mcp_ocr.backends.base.BaseOCRBackend` ABC (skeleton), `mcp_ocr.backends` package
 
 - [ ] **Step 1: Create `pyproject.toml`**
 
@@ -92,9 +96,9 @@ packages = ["mcp_ocr"]
 - [ ] **Step 2: Create directory structure and empty files**
 
 ```bash
-mkdir -p backends tests
-touch backends/__init__.py backends/base.py backends/vision.py backends/paddle.py backends/paddleocr_vl.py
-touch server.py tests/__init__.py tests/test_base.py
+mkdir -p mcp_ocr/backends tests
+touch mcp_ocr/__init__.py mcp_ocr/backends/__init__.py mcp_ocr/backends/base.py mcp_ocr/backends/vision.py mcp_ocr/backends/paddle.py mcp_ocr/backends/paddleocr_vl.py
+touch mcp_ocr/server.py tests/__init__.py tests/test_base.py
 ```
 
 - [ ] **Step 3: Create `.gitignore`**
@@ -112,14 +116,14 @@ dist/
 
 ```bash
 pip install -e .
-python3 -c "import backends; print('backends package OK')"
+python3 -c "from mcp_ocr.backends import BACKENDS; print('backends package OK')"
 python3 -c "from mcp_ocr.server import main; print('server import OK')"
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pyproject.toml backends/ server.py .gitignore tests/
+git add pyproject.toml mcp_ocr/ .gitignore tests/
 git commit -m "feat: scaffold pi-mcp-ocr project with pyproject.toml"
 ```
 
@@ -128,8 +132,8 @@ git commit -m "feat: scaffold pi-mcp-ocr project with pyproject.toml"
 ### Task 2: Base backend ABC + registry
 
 **Files:**
-- Create: `backends/base.py`
-- Modify: `backends/__init__.py`
+- Create: `mcp_ocr/backends/base.py`
+- Modify: `mcp_ocr/backends/__init__.py`
 - Create: `tests/test_base.py`
 
 **Interfaces:**
@@ -142,7 +146,7 @@ Create `tests/test_base.py`:
 
 ```python
 import pytest
-from backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend
 
 def test_abc_cannot_instantiate_directly():
     """BaseOCRBackend must be subclassed."""
@@ -198,7 +202,7 @@ Create `tests/test_registry.py`:
 
 ```python
 import pytest
-from backends import BACKENDS, get_backend
+from mcp_ocr.backends import BACKENDS, get_backend
 
 def test_registry_has_expected_backends():
     assert "vision" in BACKENDS
@@ -207,7 +211,7 @@ def test_registry_has_expected_backends():
 
 
 def test_registry_backends_are_base_backend_instances():
-    from backends.base import BaseOCRBackend
+    from mcp_ocr.backends.base import BaseOCRBackend
     for name, backend in BACKENDS.items():
         assert isinstance(backend, BaseOCRBackend), f"{name} is not a BaseOCRBackend"
 
@@ -229,7 +233,7 @@ pytest tests/test_base.py tests/test_registry.py -v
 ```
 Expected: FAIL — no module or import errors.
 
-- [ ] **Step 3: Implement `backends/base.py`**
+- [ ] **Step 3: Implement `mcp_ocr/backends/base.py`**
 
 ```python
 """Base class for OCR backends."""
@@ -272,15 +276,15 @@ class BaseOCRBackend(ABC):
                 "detail": f"Chart extraction not supported by {self.name} backend"}
 ```
 
-- [ ] **Step 4: Implement `backends/__init__.py`**
+- [ ] **Step 4: Implement `mcp_ocr/backends/__init__.py`**
 
 ```python
 """OCR backend registry."""
 
-from backends.base import BaseOCRBackend
-from backends.vision import VisionBackend
-from backends.paddle import PaddleBackend
-from backends.paddleocr_vl import PaddleOCRVlBackend
+from mcp_ocr.backends.base import BaseOCRBackend
+from mcp_ocr.backends.vision import VisionBackend
+from mcp_ocr.backends.paddle import PaddleBackend
+from mcp_ocr.backends.paddleocr_vl import PaddleOCRVlBackend
 
 BACKENDS: dict[str, BaseOCRBackend] = {
     "vision": VisionBackend(),
@@ -296,10 +300,10 @@ def get_backend(name: str) -> BaseOCRBackend:
 
 - [ ] **Step 5: Create stub backend classes so imports work**
 
-In `backends/vision.py`:
+In `mcp_ocr/backends/vision.py`:
 
 ```python
-from backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend
 
 class VisionBackend(BaseOCRBackend):
     name = "vision"
@@ -315,7 +319,7 @@ class VisionBackend(BaseOCRBackend):
         raise NotImplementedError
 ```
 
-Same pattern for `backends/paddle.py` (`name = "paddle"`, `tasks = ["text", "layout", "table"]`) and `backends/paddleocr_vl.py` (`name = "paddleocr_vl"`, `tasks = ["text", "layout", "table", "formula", "chart"]`).
+Same pattern for `mcp_ocr/backends/paddle.py` (`name = "paddle"`, `tasks = ["text", "layout", "table"]`) and `mcp_ocr/backends/paddleocr_vl.py` (`name = "paddleocr_vl"`, `tasks = ["text", "layout", "table", "formula", "chart"]`).
 
 - [ ] **Step 6: Run tests — all pass**
 
@@ -327,7 +331,7 @@ Expected: 7 passed.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add backends/base.py backends/__init__.py backends/vision.py backends/paddle.py backends/paddleocr_vl.py tests/
+git add mcp_ocr/backends/base.py backends/__init__.py backends/vision.py backends/paddle.py backends/paddleocr_vl.py tests/
 git commit -m "feat: add BaseOCRBackend ABC + backend registry with stubs"
 ```
 
@@ -336,7 +340,7 @@ git commit -m "feat: add BaseOCRBackend ABC + backend registry with stubs"
 ### Task 3: Vision backend
 
 **Files:**
-- Modify: `backends/vision.py`
+- Modify: `mcp_ocr/backends/vision.py`
 - Create: `tests/test_vision.py`
 
 **Interfaces:**
@@ -353,7 +357,7 @@ import sys
 
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="Vision backend requires macOS")
 
-from backends.vision import VisionBackend
+from mcp_ocr.backends.vision import VisionBackend
 
 
 @pytest.fixture
@@ -414,16 +418,16 @@ pytest tests/test_vision.py -v
 ```
 Expected: FAIL — NotImplementedError from stubs.
 
-- [ ] **Step 3: Implement `backends/vision.py`**
+- [ ] **Step 3: Implement `mcp_ocr/backends/vision.py`**
 
-Port the existing Vision code from the old `server.py`, extracted into the class:
+Port the existing Vision code from the old `mcp_ocr/server.py`, extracted into the class:
 
 ```python
 """Apple Vision OCR backend (macOS 10.15+)."""
 
 import os
 import sys
-from backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend
 
 _VISION_LANG_MAP = {
     "ru": ["ru-RU", "en-US"],
@@ -614,7 +618,7 @@ Expected: 5 passed (on macOS).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backends/vision.py tests/test_vision.py
+git add mcp_ocr/backends/vision.py tests/test_vision.py
 git commit -m "feat: implement Vision backend (Apple Vision OCR)"
 ```
 
@@ -623,7 +627,7 @@ git commit -m "feat: implement Vision backend (Apple Vision OCR)"
 ### Task 4: Paddle backend
 
 **Files:**
-- Modify: `backends/paddle.py`
+- Modify: `mcp_ocr/backends/paddle.py`
 - Create: `tests/test_paddle.py`
 
 **Interfaces:**
@@ -641,7 +645,7 @@ pytestmark = pytest.mark.skipif(
     True, reason="Requires PaddleOCR installed"
 )  # will be parametrized in CI
 
-from backends.paddle import PaddleBackend
+from mcp_ocr.backends.paddle import PaddleBackend
 
 
 @pytest.fixture
@@ -706,14 +710,14 @@ pytest tests/test_paddle.py -v
 ```
 Expected: all skipped (PaddleOCR not installed in test env) or FAIL if installed with NotImplementedError.
 
-- [ ] **Step 3: Implement `backends/paddle.py`**
+- [ ] **Step 3: Implement `mcp_ocr/backends/paddle.py`**
 
 ```python
 """PaddleOCR backend (cross-platform CPU)."""
 
 import os
 import logging
-from backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend
 
 logger = logging.getLogger("mcp-ocr.paddle")
 
@@ -850,7 +854,7 @@ Expected: 6 passed (or skipped if PaddleOCR not installed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backends/paddle.py tests/test_paddle.py
+git add mcp_ocr/backends/paddle.py tests/test_paddle.py
 git commit -m "feat: implement Paddle backend (PaddleOCR CPU)"
 ```
 
@@ -859,7 +863,7 @@ git commit -m "feat: implement Paddle backend (PaddleOCR CPU)"
 ### Task 5: PaddleOCR-VL backend
 
 **Files:**
-- Modify: `backends/paddleocr_vl.py`
+- Modify: `mcp_ocr/backends/paddleocr_vl.py`
 - Create: `tests/test_paddleocr_vl.py`
 
 **Interfaces:**
@@ -879,7 +883,7 @@ pytestmark = pytest.mark.skipif(
     reason="PaddleOCR-VL requires Apple Silicon"
 )
 
-from backends.paddleocr_vl import PaddleOCRVlBackend
+from mcp_ocr.backends.paddleocr_vl import PaddleOCRVlBackend
 
 
 @pytest.fixture
@@ -954,7 +958,7 @@ pytest tests/test_paddleocr_vl.py -v
 ```
 Expected: all skipped (not Apple Silicon) or FAIL with NotImplementedError.
 
-- [ ] **Step 3: Implement `backends/paddleocr_vl.py`**
+- [ ] **Step 3: Implement `mcp_ocr/backends/paddleocr_vl.py`**
 
 ```python
 """PaddleOCR-VL backend — invokes native Swift CLI via subprocess (Apple Silicon only)."""
@@ -962,7 +966,7 @@ Expected: all skipped (not Apple Silicon) or FAIL with NotImplementedError.
 import os
 import subprocess
 import logging
-from backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend
 
 logger = logging.getLogger("mcp-ocr.paddleocr-vl")
 
@@ -1093,7 +1097,7 @@ Expected: 7 passed on Apple Silicon with CLI installed, or skipped otherwise.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backends/paddleocr_vl.py tests/test_paddleocr_vl.py
+git add mcp_ocr/backends/paddleocr_vl.py tests/test_paddleocr_vl.py
 git commit -m "feat: implement PaddleOCR-VL backend (subprocess → Swift CLI)"
 ```
 
@@ -1102,11 +1106,11 @@ git commit -m "feat: implement PaddleOCR-VL backend (subprocess → Swift CLI)"
 ### Task 6: Server — dynamic tool registration + error handling
 
 **Files:**
-- Modify: `server.py`
+- Modify: `mcp_ocr/server.py`
 - Create: `tests/test_server.py`
 
 **Interfaces:**
-- Consumes: `BACKENDS` from `backends/__init__`, `BaseOCRBackend` methods
+- Consumes: `BACKENDS` from `mcp_ocr/backends/__init__`, `BaseOCRBackend` methods
 - Produces: `main()` entry point, all `ocr_<task>_<backend>` MCP tools, `@handle_errors` decorator
 
 - [ ] **Step 1: Write failing tests for server tool registration**
@@ -1117,7 +1121,7 @@ Create `tests/test_server.py`:
 import pytest
 from mcp.server import MCPServer
 
-from server import register_tools, create_server, handle_errors
+from mcp_ocr.server import register_tools, create_server, handle_errors
 
 
 def test_handle_errors_returns_success_on_ok():
@@ -1210,7 +1214,7 @@ import functools
 
 from mcp.server import MCPServer
 
-from backends import BACKENDS, get_backend
+from mcp_ocr.backends import BACKENDS, get_backend
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger("mcp-ocr")
@@ -1341,7 +1345,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server.py tests/test_server.py
+git add mcp_ocr/server.py tests/test_server.py
 git commit -m "feat: dynamic tool registration with error handling"
 ```
 
@@ -1363,7 +1367,7 @@ Create `tests/test_integration.py`:
 """End-to-end integration test — verifies server starts and tools are callable."""
 
 import pytest
-from server import create_server
+from mcp_ocr.server import create_server
 
 
 def test_server_created_and_has_tools():
@@ -1373,7 +1377,7 @@ def test_server_created_and_has_tools():
 
     tool_names = [tool.name for tool in server._tools]
     total_expected = 0
-    from backends import BACKENDS
+    from mcp_ocr.backends import BACKENDS
     for backend in BACKENDS.values():
         total_expected += len(backend.tasks)  # one per task
         total_expected += 1  # one batch per backend
