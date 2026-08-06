@@ -1,15 +1,19 @@
-# pi-mcp-ocr
+# mcp_ocr
 
 Modular OCR MCP server with pluggable backends: Apple Vision, PaddleOCR, and PaddleOCR-VL.
+
+> **Requires [pi-mcp-bridge](https://github.com/timaliev/pi-mcp-bridge)** to connect to pi.
 
 ## Installation
 
 ```bash
-# Recommended (macOS Apple Silicon):
-pip install git+https://github.com/timaliev/pi-mcp_ocr.git#egg=pi-mcp-ocr[vision,paddleocr-vl]
+pip install git+https://github.com/timaliev/mcp_ocr.git#egg=mcp-ocr[vision,paddleocr-vl]
+```
 
-# Cross-platform:
-pip install git+https://github.com/timaliev/pi-mcp_ocr.git#egg=pi-mcp-ocr[paddle]
+Or via uv:
+
+```bash
+uv tool install git+https://github.com/timaliev/mcp_ocr.git
 ```
 
 ### Optional dependency groups
@@ -23,7 +27,25 @@ pip install git+https://github.com/timaliev/pi-mcp_ocr.git#egg=pi-mcp-ocr[paddle
 
 ## Configuration
 
-Add to your MCP client config (e.g., `mcp.json` for pi):
+### With pi-mcp-bridge
+
+In `~/.pi/agent/settings.json`:
+
+```json
+{
+  "mcpBridge": {
+    "servers": [
+      {
+        "name": "ocr",
+        "command": "mcp-ocr",
+        "args": []
+      }
+    ]
+  }
+}
+```
+
+### Standalone MCP client
 
 ```json
 {
@@ -61,21 +83,11 @@ Add to your MCP client config (e.g., `mcp.json` for pi):
 | `PADDLEOCR_VL_BIN` | `paddleocr-vl` | Path to paddleocr-vl CLI binary |
 | `PADDLEOCR_VL_TIMEOUT` | `120` | Timeout in seconds for PaddleOCR-VL |
 
-## Known Issues
-
-| Issue | Status | Document |
-|-------|--------|----------|
-| PaddleOCR-VL: Model download fails (HF) | ❌ Open | [docs](docs/troubleshooting/paddleocr-vl-model-download.md) |
-| PaddleOCR-VL: Mode `accurate` not valid | ❌ Open | [docs](docs/troubleshooting/paddleocr-vl-mode-bug.md) |
-| PaddleOCR-VL: Metal shaders missing in SPM build | ✅ Fixed (cmake) | [docs](docs/troubleshooting/paddleocr-vl-metallib-fix.md) |
-
-See [docs/README.md](docs/README.md) for full backend status and guides.
-
 ## Development
 
 ```bash
-git clone https://github.com/timaliev/pi-mcp_ocr.git
-cd pi-mcp_ocr
+git clone https://github.com/timaliev/mcp_ocr.git
+cd mcp_ocr
 pip install -e .[all]
 pytest
 ```
