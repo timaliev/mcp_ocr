@@ -1,5 +1,5 @@
 import pytest
-from mcp_ocr.backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend, ErrorCode
 
 def test_abc_cannot_instantiate_directly():
     """BaseOCRBackend must be subclassed."""
@@ -48,4 +48,4 @@ def test_unsupported_task_returns_eunsupported():
     be = MinimalBackend()
     result = be.formula("foo.png")
     assert result["success"] is False
-    assert result["error"] == "EUNSUPPORTED"
+    assert result["error"] == ErrorCode.EUNSUPPORTED

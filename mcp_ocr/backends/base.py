@@ -1,6 +1,17 @@
 """Base class for OCR backends."""
 
 from abc import ABC, abstractmethod
+from enum import StrEnum
+
+
+class ErrorCode(StrEnum):
+    """Canonical error codes returned by every backend."""
+
+    ENOENT = "ENOENT"              # file not found or not loadable
+    EUNSUPPORTED = "EUNSUPPORTED"  # backend or task not available
+    EPROCESSING = "EPROCESSING"    # unexpected failure during OCR
+    ETIMEOUT = "ETIMEOUT"          # subprocess timeout
+    ECONFIG = "ECONFIG"            # binary not found, config wrong
 
 
 class BaseOCRBackend(ABC):
@@ -30,9 +41,9 @@ class BaseOCRBackend(ABC):
         ...
 
     def formula(self, path: str) -> dict:
-        return {"success": False, "error": "EUNSUPPORTED",
+        return {"success": False, "error": ErrorCode.EUNSUPPORTED,
                 "detail": f"Formula extraction not supported by {self.name} backend"}
 
     def chart(self, path: str) -> dict:
-        return {"success": False, "error": "EUNSUPPORTED",
+        return {"success": False, "error": ErrorCode.EUNSUPPORTED,
                 "detail": f"Chart extraction not supported by {self.name} backend"}

@@ -2,31 +2,16 @@
 
 import os
 import logging
-from mcp_ocr.backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend, ErrorCode
+from mcp_ocr.backends.lang import resolve_lang_code
 
 logger = logging.getLogger("mcp-ocr.paddle")
-
-_LANG_ALIASES = {
-    "russian": "ru", "rus": "ru",
-    "french": "fr", "fra": "fr",
-    "german": "de", "ger": "de", "deu": "de",
-    "spanish": "es", "spa": "es",
-    "chinese": "ch", "zh": "ch", "chi": "ch", "zho": "ch",
-    "english": "en", "eng": "en",
-    "korean": "ko", "kor": "ko",
-    "japanese": "ja", "japan": "ja", "jpn": "ja",
-    "arabic": "ar", "ara": "ar",
-    "italian": "it", "ita": "it",
-    "portuguese": "pt", "por": "pt",
-}
 
 _paddle_cache = {}
 
 
 def _resolve_lang(lang: str | None) -> str:
-    if not lang:
-        return "ch"
-    return _LANG_ALIASES.get(lang.lower(), lang)
+    return resolve_lang_code(lang, "en")
 
 
 def _get_paddle(lang: str):
@@ -46,7 +31,7 @@ class PaddleBackend(BaseOCRBackend):
 
     def extract(self, path: str, lang: str | None = None) -> dict:
         if not os.path.isfile(path):
-            return {"success": False, "error": "ENOENT",
+            return {"success": False, "error": ErrorCode.ENOENT,
                     "detail": f"File not found: {path}"}
 
         try:
@@ -71,7 +56,7 @@ class PaddleBackend(BaseOCRBackend):
             return {"success": True, "text": "\n".join(rec_texts), "lines": lines}
         except Exception as e:
             logger.exception("PaddleOCR extract failed")
-            return {"success": False, "error": "EPROCESSING", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
 
     def layout(self, path: str, lang: str | None = None) -> dict:
         result = self.extract(path, lang)
@@ -91,7 +76,7 @@ class PaddleBackend(BaseOCRBackend):
 
     def table(self, path: str) -> dict:
         if not os.path.isfile(path):
-            return {"success": False, "error": "ENOENT",
+            return {"success": False, "error": ErrorCode.ENOENT,
                     "detail": f"File not found: {path}"}
 
         try:
@@ -122,8 +107,8 @@ class PaddleBackend(BaseOCRBackend):
                             })
             return {"success": True, "tables": tables}
         except ImportError:
-            return {"success": False, "error": "EUNSUPPORTED",
+            return {"success": False, "error": ErrorCode.EUNSUPPORTED,
                     "detail": "PPStructure not available."}
         except Exception as e:
             logger.exception("PaddleOCR table extraction failed")
-            return {"success": False, "error": "EPROCESSING", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
