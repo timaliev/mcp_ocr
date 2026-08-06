@@ -47,6 +47,8 @@ In `~/.pi/agent/settings.json`:
 
 ### Standalone MCP client
 
+In `~/.mcp.json`:
+
 ```json
 {
   "mcpServers": {
@@ -60,6 +62,26 @@ In `~/.pi/agent/settings.json`:
 
 ## Backends
 
+### Quick comparison
+
+|  | Vision | Paddle | PaddleOCR-VL |
+|------|--------|--------|-------------|
+| **Speed** | ⚡ Instant | 🐢 30–90s | 🐢 2–7s (base) / 150s (dynamic) |
+| **Accuracy** | ★★★★ | ★★★ | ★★ (Cyrillic: ★) |
+| **Languages** | CJK + major European | 80+ languages | Claims 109, poor Cyrillic |
+| **Platform** | macOS 10.15+ | Cross-platform | macOS 14+, Apple Silicon |
+| **RAM usage** | ~50 MB | ~2.5 GB | ~100 MB (CLI) / 2.5 GB (Python lib) |
+| **GPU** | ANE/GPU | CPU only | Apple Silicon GPU |
+| **Install** | `pip install mcp-ocr[vision]` | `pip install mcp-ocr[paddle]` | `brew install paddleocr-vl` |
+| **First run** | Zero | Downloads models (1–2 GB) | Downloads models (1.8 GB) |
+| **Text** | ✅ | ✅ | ⚠️ Fast but inaccurate for non-CJK |
+| **Layout** | ✅ | ✅ | ⚠️ Same as text |
+| **Table** | ✅ | ✅ | ⚠️ Experimental |
+| **Formula** | ❌ | ❌ | ❌ (upstream hang) |
+| **Chart** | ❌ | ❌ | ❌ (upstream hang) |
+
+**Recommendation**: Use **Vision** for everyday OCR. It's instant, accurate for European languages, and has zero dependencies on macOS. Use PaddleOCR-VL only for CJK text where Vision falls short. Avoid Paddle (Python) backend — it loads 2.5 GB of C++ libraries for comparable results.
+
 ### Vision (`ocr_text_vision`, `ocr_layout_vision`, `ocr_table_vision`)
 - macOS 10.15+, zero install
 - GPU/ANE accelerated
@@ -70,11 +92,15 @@ In `~/.pi/agent/settings.json`:
 - Mature PaddleOCR models
 - Best for: wide language coverage, when not on macOS
 
-### PaddleOCR-VL (`ocr_text_paddleocr_vl`, `ocr_table_paddleocr_vl`, `ocr_formula_paddleocr_vl`, `ocr_chart_paddleocr_vl`)
+### PaddleOCR-VL (`ocr_text_paddleocr_vl`, `ocr_layout_paddleocr_vl`, `ocr_table_paddleocr_vl`)
 - macOS 14+, Apple Silicon (M1/M2/M3/M4)
-- 0.9B vision-language model, 109 languages
-- Best for: highest accuracy, formulas, charts, tables
-- Requires: `paddleocr-vl` CLI from https://github.com/mlx-community/paddleocr-vl.swift
+- 0.9B vision-language model, 109 languages (Cyrillic quality is poor)
+- **Default mode is `base`** (fast, ~2–7s). `dynamic` mode is 20× slower and produces garbled output
+- **Formula and chart tasks disabled** — the CLI hangs on these (upstream bug)
+- Model downloads 1.8 GB on first run; subsequent runs use cache
+- Best for: CJK text, when Vision is not available
+
+## Development
 
 ## Environment Variables
 
