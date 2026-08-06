@@ -3,7 +3,7 @@
 import os
 import subprocess
 import logging
-from mcp_ocr.backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend, ErrorCode
 
 logger = logging.getLogger("mcp-ocr.paddleocr-vl")
 
@@ -37,8 +37,10 @@ def _map_task(task: str) -> str:
 
 
 _MODE_MAP = {
-    "accurate": "dynamic",  # best quality → NaViT dynamic resolution
-    "fast": "base",         # fast path → fixed 448×448
+    "accurate": "dynamic",  # NaViT dynamic resolution (slow, experimental)
+    "fast": "base",         # fixed 448×448
+    "base": "base",          # explicit base
+    "dynamic": "dynamic",    # explicit dynamic
 }
 
 
@@ -51,7 +53,7 @@ class PaddleOCRVlBackend(BaseOCRBackend):
 
     def _run(self, path: str, task: str, mode: str = "base") -> dict:
         if not os.path.isfile(path):
-            return {"success": False, "error": "ENOENT",
+            return {"success": False, "error": ErrorCode.ENOENT,
                     "detail": f"File not found: {path}"}
 
         cli_task = _map_task(task)
@@ -68,7 +70,7 @@ class PaddleOCRVlBackend(BaseOCRBackend):
         except FileNotFoundError:
             return {
                 "success": False,
-                "error": "ECONFIG",
+                "error": ErrorCode.ECONFIG,
                 "detail": (
                     "PaddleOCR-VL CLI not found. Install via: "
                     "brew install paddleocr-vl or build from "
@@ -76,16 +78,16 @@ class PaddleOCRVlBackend(BaseOCRBackend):
                 ),
             }
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": "ETIMEOUT",
+            return {"success": False, "error": ErrorCode.ETIMEOUT,
                     "detail": f"PaddleOCR-VL timed out after {_BINARY_TIMEOUT}s"}
 
         if result.returncode != 0:
-            return {"success": False, "error": "EPROCESSING",
+            return {"success": False, "error": ErrorCode.EPROCESSING,
                     "detail": result.stderr.strip() or "PaddleOCR-VL returned non-zero exit code"}
 
         return {"success": True, "raw": result.stdout.strip()}
 
-    def extract(self, path: str, lang: str | None = None, mode: str = "base") -> dict:
+    def extract(self, path: str, mode: str = "base") -> dict:
         result = self._run(path, "extract", mode)
         if not result.get("success"):
             return result
@@ -94,8 +96,8 @@ class PaddleOCRVlBackend(BaseOCRBackend):
         lines = [{"text": t, "confidence": 1.0, "bbox": []} for t in lines_text if t.strip()]
         return {"success": True, "text": raw, "lines": lines}
 
-    def layout(self, path: str, lang: str | None = None, mode: str = "base") -> dict:
-        result = self.extract(path, lang, mode)
+    def layout(self, path: str, mode: str = "base") -> dict:
+        result = self.extract(path, mode)
         if not result.get("success"):
             return result
         blocks = []

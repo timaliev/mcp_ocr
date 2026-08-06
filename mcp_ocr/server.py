@@ -7,7 +7,7 @@ import functools
 
 from mcp.server import MCPServer
 
-from mcp_ocr.backends import BACKENDS, get_backend
+from mcp_ocr.backends import BACKENDS, get_backend, ErrorCode
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger("mcp-ocr")
@@ -20,12 +20,12 @@ def handle_errors(func):
         try:
             return func(*args, **kwargs)
         except FileNotFoundError as e:
-            return {"success": False, "error": "ENOENT", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.ENOENT, "detail": str(e)}
         except ImportError as e:
-            return {"success": False, "error": "EUNSUPPORTED", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.EUNSUPPORTED, "detail": str(e)}
         except Exception as e:
             logger.exception("Tool failed")
-            return {"success": False, "error": "EPROCESSING", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
     return wrapper
 
 
@@ -80,7 +80,7 @@ def _make_tool_fn(method):
     _has_mode = "mode" in _sig.parameters
 
     @handle_errors
-    def tool(path: str, lang: str | None = None, mode: str = "accurate") -> dict:
+    def tool(path: str, lang: str | None = None, mode: str = "base") -> dict:
         kwargs = {"path": path}
         if _has_lang:
             kwargs["lang"] = lang
@@ -99,7 +99,7 @@ def _make_batch_fn(method):
     _has_mode = "mode" in _sig.parameters
 
     @handle_errors
-    def batch_tool(paths: list[str], lang: str | None = None, mode: str = "accurate") -> dict:
+    def batch_tool(paths: list[str], lang: str | None = None, mode: str = "base") -> dict:
         results = []
         for p in paths:
             kwargs = {"path": p}
