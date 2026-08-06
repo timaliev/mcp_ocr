@@ -41,8 +41,7 @@ def test_paddleocr_vl_backend_tasks():
     assert "text" in be.tasks
     assert "layout" in be.tasks
     assert "table" in be.tasks
-    assert "formula" in be.tasks
-    assert "chart" in be.tasks
+    # formula and chart are listed but marked EUNSUPPORTED (upstream hang)
 
 
 def test_paddleocr_vl_extract_returns_success(backend, sample_image):
@@ -58,10 +57,18 @@ def test_paddleocr_vl_table_returns_tables(backend, sample_image):
     assert "tables" in result
 
 
-def test_paddleocr_vl_formula_returns_formulas(backend, sample_image):
+def test_paddleocr_vl_formula_returns_eunsupported(backend, sample_image):
+    """Formula task hangs in paddleocr-vl CLI — returned as EUNSUPPORTED."""
     result = backend.formula(sample_image)
-    assert result["success"] is True
-    assert "formulas" in result
+    assert result["success"] is False
+    assert result.get("error") == "EUNSUPPORTED"
+
+
+def test_paddleocr_vl_chart_returns_eunsupported(backend, sample_image):
+    """Chart task hangs in paddleocr-vl CLI — returned as EUNSUPPORTED."""
+    result = backend.chart(sample_image)
+    assert result["success"] is False
+    assert result.get("error") == "EUNSUPPORTED"
 
 
 def test_paddleocr_vl_missing_file_returns_error(backend):

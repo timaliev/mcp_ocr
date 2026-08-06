@@ -60,6 +60,11 @@ class PaddleOCRVlBackend(BaseOCRBackend):
         cli_mode = _MODE_MAP.get(mode, mode)
         cmd = [self._bin, "ocr", path, "--task", cli_task, "--mode", cli_mode]
 
+        # Pass model path if set
+        model_path = os.environ.get("PADDLEOCR_VL_MODEL", "")
+        if model_path:
+            cmd += ["--model", model_path]
+
         try:
             result = subprocess.run(
                 cmd,
@@ -119,15 +124,9 @@ class PaddleOCRVlBackend(BaseOCRBackend):
         return {"success": True, "tables": [{"csv": raw, "headers": [], "rows": []}]}
 
     def formula(self, path: str, mode: str = "base") -> dict:
-        result = self._run(path, "formula", mode)
-        if not result.get("success"):
-            return result
-        raw = result.pop("raw", "")
-        return {"success": True, "formulas": [{"text": raw, "format": "latex"}]}
+        return {"success": False, "error": ErrorCode.EUNSUPPORTED,
+                "detail": "Formula extraction is unstable in paddleocr-vl CLI (known upstream hang)"}
 
     def chart(self, path: str, mode: str = "base") -> dict:
-        result = self._run(path, "chart", mode)
-        if not result.get("success"):
-            return result
-        raw = result.pop("raw", "")
-        return {"success": True, "charts": [{"data": raw}]}
+        return {"success": False, "error": ErrorCode.EUNSUPPORTED,
+                "detail": "Chart extraction is unstable in paddleocr-vl CLI (known upstream hang)"}
