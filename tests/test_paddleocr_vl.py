@@ -78,3 +78,25 @@ def test_paddleocr_vl_binary_not_found(tmp_path):
     result = backend.extract(str(img))
     assert result["success"] is False
     assert "error" in result
+
+
+def test_paddleocr_vl_extract_default_mode_completes_fast(backend, sample_image):
+    """Default mode must be base (~7s), not dynamic (~150s). Completes under 30s."""
+    import time
+    start = time.monotonic()
+    result = backend.extract(sample_image)
+    elapsed = time.monotonic() - start
+    assert result["success"] is True
+    assert elapsed < 30, f"extract took {elapsed:.1f}s, expected < 30s (dynamic mode would be ~150s)"
+
+
+def test_paddleocr_vl_extract_rejects_lang_param(backend, sample_image):
+    """lang parameter was removed — CLI has no --lang support."""
+    with pytest.raises(TypeError, match="lang"):
+        backend.extract(sample_image, lang="ru")
+
+
+def test_paddleocr_vl_layout_rejects_lang_param(backend, sample_image):
+    """lang parameter was removed from layout too."""
+    with pytest.raises(TypeError, match="lang"):
+        backend.layout(sample_image, lang="ru")
