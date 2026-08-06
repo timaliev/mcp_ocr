@@ -1,9 +1,15 @@
 import pytest
 import sys
 
+try:
+    import paddleocr
+    _PADDLE_AVAILABLE = True
+except ImportError:
+    _PADDLE_AVAILABLE = False
+
 pytestmark = pytest.mark.skipif(
-    True, reason="Requires PaddleOCR installed"
-)  # will be parametrized in CI
+    not _PADDLE_AVAILABLE, reason="Requires PaddleOCR installed"
+)
 
 from mcp_ocr.backends.paddle import PaddleBackend
 
