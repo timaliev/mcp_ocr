@@ -61,6 +61,16 @@ Add to your MCP client config (e.g., `mcp.json` for pi):
 | `PADDLEOCR_VL_BIN` | `paddleocr-vl` | Path to paddleocr-vl CLI binary |
 | `PADDLEOCR_VL_TIMEOUT` | `120` | Timeout in seconds for PaddleOCR-VL |
 
+## Known Issues
+
+| Issue | Status | Document |
+|-------|--------|----------|
+| PaddleOCR-VL: Model download fails (HF) | ❌ Open | [docs](docs/troubleshooting/paddleocr-vl-model-download.md) |
+| PaddleOCR-VL: Mode `accurate` not valid | ❌ Open | [docs](docs/troubleshooting/paddleocr-vl-mode-bug.md) |
+| PaddleOCR-VL: Metal shaders missing in SPM build | ✅ Fixed (cmake) | [docs](docs/troubleshooting/paddleocr-vl-metallib-fix.md) |
+
+See [docs/README.md](docs/README.md) for full backend status and guides.
+
 ## Development
 
 ```bash

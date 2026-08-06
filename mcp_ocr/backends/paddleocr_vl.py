@@ -36,6 +36,12 @@ def _map_task(task: str) -> str:
     return mapping.get(task, "ocr")
 
 
+_MODE_MAP = {
+    "accurate": "dynamic",  # best quality → NaViT dynamic resolution
+    "fast": "base",         # fast path → fixed 448×448
+}
+
+
 class PaddleOCRVlBackend(BaseOCRBackend):
     name = "paddleocr_vl"
     tasks = ["text", "layout", "table", "formula", "chart"]
@@ -49,7 +55,8 @@ class PaddleOCRVlBackend(BaseOCRBackend):
                     "detail": f"File not found: {path}"}
 
         cli_task = _map_task(task)
-        cmd = [self._bin, "ocr", path, "--task", cli_task, "--mode", mode]
+        cli_mode = _MODE_MAP.get(mode, mode)
+        cmd = [self._bin, "ocr", path, "--task", cli_task, "--mode", cli_mode]
 
         try:
             result = subprocess.run(
