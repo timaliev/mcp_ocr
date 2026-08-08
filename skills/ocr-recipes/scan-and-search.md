@@ -2,6 +2,14 @@
 
 Full pipeline: photo → barcode/QR → web search for product.
 
+## Pre-flight
+
+Verify both raster and search tools:
+```
+mcp_raster_raster_info(path=<any_valid_image>)
+```
+If raster unavailable: "Raster MCP server needed. Install: uv tool install mcp-images".
+
 ## Steps
 
 1. **Decode barcode:**

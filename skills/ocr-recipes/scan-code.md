@@ -2,6 +2,14 @@
 
 Decode barcode or QR code from an image.
 
+## Pre-flight
+
+Check if raster MCP server is available:
+```
+mcp_raster_raster_info(path=<any_valid_image>)
+```
+If `mcp_raster_raster_info` fails: "Raster MCP server (mcp-images) not available. Install with: uv tool install mcp-images".
+
 ## Steps
 
 ```
@@ -15,4 +23,4 @@ Returns: `{"codes": [{"type": "QRCODE"|"EAN13"|..., "data": "..."}]}`
 - **Data Matrix:** industrial/shipping code
 
 If no code found: check image quality (blurry, small, partially cropped).
-Suggest user take a clearer photo.
+Suggest user take a clearer photo or crop to just the barcode area.
