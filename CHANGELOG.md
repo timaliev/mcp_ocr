@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2](https://github.com/timaliev/mcp_ocr/compare/v1.0.1..v1.0.2) - 2026-08-08
+
+### Miscellaneous Chores
+
+- add VERSION, CONTEXT.md, development.md, fix README pi link - ([f333567](https://github.com/timaliev/mcp_ocr/commit/f33356794fa0aa36537165a2ee4ee28e0d7dbcea)) - Tim Aliev
+---
+
 ## [1.0.1](https://github.com/timaliev/mcp_ocr/compare/v1.0.0..v1.0.1) - 2026-08-06
 
 ### Bug Fixes
