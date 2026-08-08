@@ -41,8 +41,7 @@ def test_paddleocr_vl_backend_tasks():
     assert "text" in be.tasks
     assert "layout" in be.tasks
     assert "table" in be.tasks
-    assert "formula" in be.tasks
-    assert "chart" in be.tasks
+    # formula and chart are listed but marked EUNSUPPORTED (upstream hang)
 
 
 def test_paddleocr_vl_extract_returns_success(backend, sample_image):
@@ -58,10 +57,18 @@ def test_paddleocr_vl_table_returns_tables(backend, sample_image):
     assert "tables" in result
 
 
-def test_paddleocr_vl_formula_returns_formulas(backend, sample_image):
+def test_paddleocr_vl_formula_returns_eunsupported(backend, sample_image):
+    """Formula task hangs in paddleocr-vl CLI — returned as EUNSUPPORTED."""
     result = backend.formula(sample_image)
-    assert result["success"] is True
-    assert "formulas" in result
+    assert result["success"] is False
+    assert result.get("error") == "EUNSUPPORTED"
+
+
+def test_paddleocr_vl_chart_returns_eunsupported(backend, sample_image):
+    """Chart task hangs in paddleocr-vl CLI — returned as EUNSUPPORTED."""
+    result = backend.chart(sample_image)
+    assert result["success"] is False
+    assert result.get("error") == "EUNSUPPORTED"
 
 
 def test_paddleocr_vl_missing_file_returns_error(backend):
@@ -78,3 +85,25 @@ def test_paddleocr_vl_binary_not_found(tmp_path):
     result = backend.extract(str(img))
     assert result["success"] is False
     assert "error" in result
+
+
+def test_paddleocr_vl_extract_default_mode_completes_fast(backend, sample_image):
+    """Default mode must be base (~7s), not dynamic (~150s). Completes under 30s."""
+    import time
+    start = time.monotonic()
+    result = backend.extract(sample_image)
+    elapsed = time.monotonic() - start
+    assert result["success"] is True
+    assert elapsed < 30, f"extract took {elapsed:.1f}s, expected < 30s (dynamic mode would be ~150s)"
+
+
+def test_paddleocr_vl_extract_rejects_lang_param(backend, sample_image):
+    """lang parameter was removed — CLI has no --lang support."""
+    with pytest.raises(TypeError, match="lang"):
+        backend.extract(sample_image, lang="ru")
+
+
+def test_paddleocr_vl_layout_rejects_lang_param(backend, sample_image):
+    """lang parameter was removed from layout too."""
+    with pytest.raises(TypeError, match="lang"):
+        backend.layout(sample_image, lang="ru")

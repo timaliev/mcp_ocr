@@ -1,8 +1,8 @@
 """Apple Vision OCR backend (macOS 10.15+)."""
 
 import os
-import sys
-from mcp_ocr.backends.base import BaseOCRBackend
+from mcp_ocr.backends.base import BaseOCRBackend, ErrorCode
+from mcp_ocr.backends.lang import resolve_lang_code
 
 _VISION_LANG_MAP = {
     "ru": ["ru-RU", "en-US"],
@@ -19,26 +19,10 @@ _VISION_LANG_MAP = {
     "pt": ["pt-BR", "en-US"],
 }
 
-_LANG_ALIASES = {
-    "russian": "ru", "rus": "ru",
-    "french": "fr", "fra": "fr",
-    "german": "de", "ger": "de", "deu": "de",
-    "spanish": "es", "spa": "es",
-    "chinese": "ch", "zh": "ch", "chi": "ch", "zho": "ch",
-    "english": "en", "eng": "en",
-    "korean": "ko", "kor": "ko",
-    "japanese": "ja", "japan": "ja", "jpn": "ja",
-    "arabic": "ar", "ara": "ar",
-    "italian": "it", "ita": "it",
-    "portuguese": "pt", "por": "pt",
-}
-
 
 def _resolve_vision_langs(lang: str | None) -> list[str]:
-    if not lang:
-        return ["en-US"]
-    lang = _LANG_ALIASES.get(lang.lower(), lang.lower())
-    return _VISION_LANG_MAP.get(lang, ["en-US"])
+    code = resolve_lang_code(lang, "en")
+    return _VISION_LANG_MAP.get(code, ["en-US"])
 
 
 class VisionBackend(BaseOCRBackend):
@@ -59,7 +43,7 @@ class VisionBackend(BaseOCRBackend):
         import Quartz
 
         if not os.path.isfile(path):
-            return None, {"success": False, "error": "EIMAGE",
+            return None, {"success": False, "error": ErrorCode.ENOENT,
                           "detail": f"Cannot load image: {path}"}
 
         url = Quartz.CFURLCreateFromFileSystemRepresentation(
@@ -67,11 +51,11 @@ class VisionBackend(BaseOCRBackend):
         )
         src = Quartz.CGImageSourceCreateWithURL(url, None)
         if src is None:
-            return None, {"success": False, "error": "EIMAGE",
+            return None, {"success": False, "error": ErrorCode.ENOENT,
                           "detail": f"Cannot load image: {path}"}
         img = Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
         if img is None:
-            return None, {"success": False, "error": "EIMAGE",
+            return None, {"success": False, "error": ErrorCode.ENOENT,
                           "detail": f"Cannot decode image: {path}"}
         return img, None
 
@@ -131,7 +115,7 @@ class VisionBackend(BaseOCRBackend):
             full_text = "\n".join(line["text"] for line in lines)
             return {"success": True, "text": full_text, "lines": lines}
         except Exception as e:
-            return {"success": False, "error": "EPROCESSING", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
 
     def layout(self, path: str, lang: str | None = None, mode: str = "accurate") -> dict:
         result = self.extract(path, lang, mode)
@@ -153,7 +137,7 @@ class VisionBackend(BaseOCRBackend):
 
     def table(self, path: str, lang: str | None = None, mode: str = "accurate") -> dict:
         if not self._has_table_support:
-            return {"success": False, "error": "EUNSUPPORTED",
+            return {"success": False, "error": ErrorCode.EUNSUPPORTED,
                     "detail": "Table detection requires macOS 15+ (use ocr_text_vision instead)"}
 
         import Vision, Quartz
@@ -180,4 +164,4 @@ class VisionBackend(BaseOCRBackend):
                 tables.append({"text": text, "csv": "", "headers": [], "rows": []})
             return {"success": True, "tables": tables}
         except Exception as e:
-            return {"success": False, "error": "EPROCESSING", "detail": str(e)}
+            return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}

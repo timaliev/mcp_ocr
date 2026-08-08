@@ -4,7 +4,8 @@ import sys
 
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="Vision backend requires macOS")
 
-from mcp_ocr.backends.vision import VisionBackend
+from mcp_ocr.backends.vision import VisionBackend, _resolve_vision_langs
+from mcp_ocr.backends.base import ErrorCode
 
 
 @pytest.fixture
@@ -48,7 +49,7 @@ def test_vision_layout_returns_blocks(backend, sample_image):
 def test_vision_missing_file_returns_error(backend):
     result = backend.extract("/nonexistent/path.png")
     assert result["success"] is False
-    assert result["error"] == "EIMAGE"
+    assert result["error"] == ErrorCode.ENOENT
 
 
 def test_vision_tasks_declared():
