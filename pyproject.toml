@@ -1,6 +1,6 @@
 [project]
 name = "mcp-ocr"
-version = "1.0.2"
+version = "1.1.0"
 description = "Modular OCR MCP server with Vision, PaddleOCR, and PaddleOCR-VL backends"
 requires-python = ">=3.11,<3.14"
 dependencies = [
