@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [unreleased]
+
+### Features
+
+- **(skills)** add ocr-recipes skill with 12 pluggable subskills (#5) - ([47e5c07](https://github.com/timaliev/mcp_ocr/commit/47e5c074fe0d0d69cad2d09a73a3293061c1eb26)) - Tim Aliev
+- add --version flag - ([d6a204d](https://github.com/timaliev/mcp_ocr/commit/d6a204d2c6c543696531f9780cf90d260e2b9d14)) - Tim Aliev
+---
+
 ## [1.0.2](https://github.com/timaliev/mcp_ocr/compare/v1.0.1..v1.0.2) - 2026-08-08
 
 ### Miscellaneous Chores
