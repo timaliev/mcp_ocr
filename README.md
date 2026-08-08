@@ -2,6 +2,10 @@
 
 Modular OCR MCP server with pluggable backends: Apple Vision, PaddleOCR, and PaddleOCR-VL.
 
+> **Bundled skill:** `ocr-recipes` — 12 pluggable OCR workflows (receipt scanner,
+> business card, QR→shopping, document OCR, batch processing, preprocessing guide).
+> Auto-loads in Pi.
+>
 > **Requires [pi-mcp-bridge](https://github.com/timaliev/pi-mcp-bridge)** to connect to [pi](https://pi.dev).
 
 ## Quick start
