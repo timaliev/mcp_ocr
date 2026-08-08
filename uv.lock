@@ -735,7 +735,7 @@ cli = [
 
 [[package]]
 name = "mcp-ocr"
-version = "1.0.0"
+version = "1.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
