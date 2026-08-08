@@ -2,6 +2,9 @@
 
 Modular OCR MCP server with pluggable backends: Apple Vision, PaddleOCR, and PaddleOCR-VL.
 
+> **Bundled skill:** `raster-recipes` — 20+ everyday image recipes (vivid colors,
+> red-eye removal, QR→shopping, receipt scanner, etc.). Auto-loads in Pi.
+>
 > **Requires [pi-mcp-bridge](https://github.com/timaliev/pi-mcp-bridge)** to connect to [pi](https://pi.dev).
 
 ## Quick start
