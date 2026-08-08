@@ -139,6 +139,11 @@ def _register_batch_tool(server: MCPServer, backend_name: str, backend):
 
 
 def main():
+    import sys
+    if "--version" in sys.argv:
+        from importlib.metadata import version
+        print(f"mcp-ocr {version('mcp-ocr')}")
+        return
     server = create_server()
     server.run()
 
