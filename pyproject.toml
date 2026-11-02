@@ -9,7 +9,7 @@ dependencies = [
 
 [project.optional-dependencies]
 vision = ["pyobjc-framework-Vision", "pyobjc-framework-Quartz"]
-paddle = ["paddleocr>=2.10", "paddlepaddle>=3.3.1"]
+paddle = ["paddleocr>=3.0", "paddlepaddle>=3.3.1"]
 xiaomi = ["transformers>=5.17", "torch>=2.6", "pillow"]
 all = [
     "mcp-ocr[vision,paddle,xiaomi]",
