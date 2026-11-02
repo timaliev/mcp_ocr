@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 import functools
+import inspect
 
 from mcp.server import MCPServer
 
@@ -38,10 +39,11 @@ _BACKEND_DESCRIPTIONS = {
         "PaddleOCR CPU — cross-platform, mature model. "
         "Wider language support than Vision, but slower. Requires PaddleOCR Python package."
     ),
-    "paddleocr_vl": (
-        "PaddleOCR-VL — 0.9B vision-language model on Apple Silicon (M1+). "
-        "Most accurate, 109 languages, supports tables/formulas/charts. "
-        "Requires paddleocr-vl Swift CLI."
+    "xiaomi": (
+        "Xiaomi-OCR-0 — local 0.8B document-parsing VLM (transformers; Apple Silicon "
+        "MPS, CUDA or CPU). Best structure fidelity: Markdown output, HTML tables, "
+        "LaTeX formulas, key-information extraction. Strong on Cyrillic, English, "
+        "German and Japanese; Arabic/Korean are weak."
     ),
 }
 
@@ -54,6 +56,14 @@ def _build_tool_description(task: str, backend_name: str) -> str:
         "table": "Extract tables from an image. Returns structured CSV/JSON.",
         "formula": "Extract mathematical formulas from an image. Returns LaTeX.",
         "chart": "Extract chart data from an image. Returns structured data.",
+        "document": (
+            "Parse a document image into Markdown: tables become HTML tables, "
+            "formulas stay LaTeX, reading order preserved. Returns {'markdown': ...}."
+        ),
+        "kie": (
+            "Extract key information from a document image as a JSON object. "
+            "Pass 'fields' (list of names) to narrow the output schema."
+        ),
         "batch": "OCR multiple images at once. Returns consolidated results.",
     }
     backend_desc = _BACKEND_DESCRIPTIONS.get(backend_name, "")
@@ -72,40 +82,70 @@ def create_server() -> MCPServer:
     return server
 
 
-def _make_tool_fn(method):
-    """Create a tool function that delegates to a backend method."""
-    import inspect as _inspect
-    _sig = _inspect.signature(method)
-    _has_lang = "lang" in _sig.parameters
-    _has_mode = "mode" in _sig.parameters
+def _split_fields(fields):
+    """Normalise a fields argument to a list of non-empty names or None."""
+    if not fields:
+        return None
+    if isinstance(fields, str):
+        fields = fields.split(",")
+    names = [name.strip() for name in fields if name.strip()]
+    return names or None
 
-    @handle_errors
-    def tool(path: str, lang: str | None = None, mode: str = "base") -> dict:
-        kwargs = {"path": path}
-        if _has_lang:
-            kwargs["lang"] = lang
-        if _has_mode:
-            kwargs["mode"] = mode
-        return method(**kwargs)
+
+def _make_tool_fn(method):
+    """Create a tool function exposing only the parameters ``method`` accepts."""
+    params = inspect.signature(method).parameters
+    has_fields = "fields" in params
+    has_lang = "lang" in params
+    has_mode = "mode" in params
+
+    if has_fields:
+
+        @handle_errors
+        def tool(path: str, fields: list[str] | None = None) -> dict:
+            return method(path=path, fields=_split_fields(fields))
+
+    elif has_lang and has_mode:
+
+        @handle_errors
+        def tool(path: str, lang: str | None = None, mode: str = "accurate") -> dict:
+            return method(path=path, lang=lang, mode=mode)
+
+    elif has_lang:
+
+        @handle_errors
+        def tool(path: str, lang: str | None = None) -> dict:
+            return method(path=path, lang=lang)
+
+    elif has_mode:
+
+        @handle_errors
+        def tool(path: str, mode: str = "accurate") -> dict:
+            return method(path=path, mode=mode)
+
+    else:
+
+        @handle_errors
+        def tool(path: str) -> dict:
+            return method(path=path)
 
     return tool
 
 
 def _make_batch_fn(method):
     """Create a batch tool function that delegates to a backend method."""
-    import inspect as _inspect
-    _sig = _inspect.signature(method)
-    _has_lang = "lang" in _sig.parameters
-    _has_mode = "mode" in _sig.parameters
+    params = inspect.signature(method).parameters
+    has_lang = "lang" in params
+    has_mode = "mode" in params
 
     @handle_errors
-    def batch_tool(paths: list[str], lang: str | None = None, mode: str = "base") -> dict:
+    def batch_tool(paths: list[str], lang: str | None = None, mode: str = "accurate") -> dict:
         results = []
         for p in paths:
             kwargs = {"path": p}
-            if _has_lang:
+            if has_lang:
                 kwargs["lang"] = lang
-            if _has_mode:
+            if has_mode:
                 kwargs["mode"] = mode
             try:
                 r = method(**kwargs)
