@@ -57,3 +57,104 @@ def test_vision_tasks_declared():
     assert "text" in backend.tasks
     assert "layout" in backend.tasks
     assert "table" in backend.tasks
+
+
+class _FakeRequest:
+    """Records the request configuration so tests can assert on it."""
+
+    def __init__(self):
+        self.revision = None
+        self.level = None
+        self.languages = None
+
+    def init(self):
+        return self
+
+    def setRevision_(self, value):
+        self.revision = value
+
+    def setRecognitionLevel_(self, value):
+        self.level = value
+
+    def setUsesLanguageCorrection_(self, value):
+        pass
+
+    def setRecognitionLanguages_(self, value):
+        self.languages = list(value)
+
+    def results(self):
+        return []
+
+
+class _FakeVision:
+    VNRequestTextRecognitionLevelAccurate = "accurate"
+    VNRequestTextRecognitionLevelFast = "fast"
+    VNRecognizeTextRequestRevision2 = 2
+    VNRecognizeTextRequestRevision3 = 3
+
+    def __init__(self):
+        self.last_request = None
+
+    @property
+    def VNRecognizeTextRequest(self):
+        outer = self
+        backend = self
+
+        class _Request(_FakeRequest):
+            @classmethod
+            def alloc(cls):
+                request = _Request()
+                backend.last_request = request
+                return request
+
+        return _Request
+
+    class VNImageRequestHandler:
+        @classmethod
+        def alloc(cls):
+            return cls()
+
+        def initWithCGImage_options_(self, image, options):
+            return self
+
+        def performRequests_error_(self, requests, error):
+            return True, None
+
+
+def _fake_vision(monkeypatch):
+    fake = _FakeVision()
+    monkeypatch.setitem(sys.modules, "Vision", fake)
+    backend = VisionBackend()
+    monkeypatch.setattr(backend, "_load_image", lambda path: (object(), None))
+    return backend, fake
+
+
+def test_base_mode_uses_accurate_recognizer_and_language(monkeypatch):
+    backend, fake = _fake_vision(monkeypatch)
+
+    result = backend.extract("page.png", lang="russian", mode="base")
+
+    assert result["success"] is True
+    assert fake.last_request.level == "accurate"
+    assert fake.last_request.languages == ["ru-RU", "en-US"]
+
+
+def test_fast_mode_uses_fast_recognizer(monkeypatch):
+    backend, fake = _fake_vision(monkeypatch)
+
+    backend.extract("page.png", mode="fast")
+
+    assert fake.last_request.level == "fast"
+
+
+def test_table_reports_missing_vision_api_truthfully(monkeypatch, tmp_path):
+    _fake_vision(monkeypatch)
+    image = tmp_path / "page.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    backend = VisionBackend()
+
+    result = backend.table(str(image))
+
+    assert result["success"] is False
+    assert result["error"] == ErrorCode.EUNSUPPORTED
+    assert "VNRecognizeDocumentsRequest" in result["detail"]
