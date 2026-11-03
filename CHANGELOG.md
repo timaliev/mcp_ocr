@@ -12,12 +12,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [unreleased]
+## [1.2.0](https://github.com/timaliev/mcp_ocr/compare/v1.1.0..v1.2.0) - 2026-11-03
+
+### Features
+
+- **(backend)** add xiaomi-ocr-0 document parsing backend - ([6f264b0](https://github.com/timaliev/mcp_ocr/commit/6f264b0cbcfc19df7089cbaf7406262d6a31d6ed)) - Tim Aliev
+
+### Bug Fixes
+
+- **(paddle)** extract tables with PaddleOCR 3.x PPStructureV3 - ([c992644](https://github.com/timaliev/mcp_ocr/commit/c992644ce4836017d36f84d5ec344c8c26348ce3)) - Tim Aliev
+- **(skills)** add raster server check to QR recipes + integration tests (#9) - ([2a1da0e](https://github.com/timaliev/mcp_ocr/commit/2a1da0eaa3ebfe62a5e330798b4a92fb498bfd90)) - Tim Aliev
+- **(vision)** default to accurate recognizer and report table support honestly - ([7845462](https://github.com/timaliev/mcp_ocr/commit/7845462e91e456b609ea61fb0bb8eb86a27b931d)) - Tim Aliev
+
+### Refactoring
+
+- **(backend)** remove paddleocr-vl backend - ([7f00a51](https://github.com/timaliev/mcp_ocr/commit/7f00a51f0892e7a2fb377fc4f7fca80a9da51120)) - Tim Aliev
+
+### Documentation
+
+- **(readme)** document xiaomi backend and paddleocr-vl removal - ([f140d79](https://github.com/timaliev/mcp_ocr/commit/f140d79ba6038d883ece9f758414983e3df97534)) - Tim Aliev
+---
+
+## [1.1.0](https://github.com/timaliev/mcp_ocr/compare/v1.0.2..v1.1.0) - 2026-08-08
 
 ### Features
 
 - **(skills)** add ocr-recipes skill with 12 pluggable subskills (#5) - ([47e5c07](https://github.com/timaliev/mcp_ocr/commit/47e5c074fe0d0d69cad2d09a73a3293061c1eb26)) - Tim Aliev
 - add --version flag - ([d6a204d](https://github.com/timaliev/mcp_ocr/commit/d6a204d2c6c543696531f9780cf90d260e2b9d14)) - Tim Aliev
+
+### Bug Fixes
+
+- **(paddle)** use import check instead of hardcoded True skip - ([19c46fe](https://github.com/timaliev/mcp_ocr/commit/19c46fe86c754eea41b31e0eb18965e49c8b7ebc)) - Tim Aliev
 ---
 
 ## [1.0.2](https://github.com/timaliev/mcp_ocr/compare/v1.0.1..v1.0.2) - 2026-08-08

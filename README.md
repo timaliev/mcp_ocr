@@ -1,6 +1,6 @@
 # mcp_ocr
 
-Modular OCR MCP server with pluggable backends: Apple Vision, PaddleOCR, and PaddleOCR-VL.
+Modular OCR MCP server with pluggable backends: Apple Vision, PaddleOCR, and Xiaomi-OCR-0 (document parsing, tables, formulas, KIE).
 
 > **Bundled skill:** `ocr-recipes` — 12 pluggable OCR workflows (receipt scanner,
 > business card, QR→shopping, document OCR, batch processing, preprocessing guide).
@@ -28,7 +28,8 @@ Add to `~/.pi/agent/settings.json` under `mcpBridge.servers`:
 > `setupCommands` runs before each session start. It auto-installs the server with all
 > backends from GitHub. Requires `uv` on `PATH`. Requires pi-mcp-bridge ≥1.0.0.
 
-Restart pi. Done — Vision, Paddle, and PaddleOCR-VL are all available.
+Restart pi. Done — Vision, Paddle, and Xiaomi-OCR-0 are all available
+(Xiaomi-OCR-0 needs the `[xiaomi]` extra: `mcp-ocr[xiaomi]`).
 
 ### Manual install (standalone MCP client)
 
@@ -41,6 +42,9 @@ uv tool install --python 3.11 "mcp-ocr[vision] @ git+https://github.com/timaliev
 
 # Paddle only (cross-platform, CPU)
 uv tool install --python 3.11 "mcp-ocr[paddle] @ git+https://github.com/timaliev/mcp_ocr.git"
+
+# Xiaomi-OCR-0 only (document parsing / tables / formulas / KIE; ~1.6 GB model)
+uv tool install --python 3.11 "mcp-ocr[xiaomi] @ git+https://github.com/timaliev/mcp_ocr.git"
 ```
 
 Then configure your MCP client to run `mcp-ocr`.
@@ -50,13 +54,9 @@ Then configure your MCP client to run `mcp-ocr`.
 | Group | Backend | Python deps | External deps |
 |-------|---------|-------------|---------------|
 | `vision` | Apple Vision | `pyobjc-framework-vision`, `pyobjc-framework-quartz` | macOS 10.15+ |
-| `paddle` | PaddleOCR | `paddleocr`, `paddlepaddle` (~2.5 GB) | Nothing |
-| `paddleocr-vl` | PaddleOCR-VL | None (calls CLI via subprocess) | `paddleocr-vl` CLI + model weights (~1.8 GB) |
-| `all` | Everything | vision + paddle | vision + paddle + paddleocr-vl |
-
-### Installing PaddleOCR-VL CLI
-
-The VL backend is the hardest to set up. See the full guide below.
+| `paddle` | PaddleOCR | `paddleocr>=3`, `paddlepaddle` (~2.5 GB) | Nothing |
+| `xiaomi` | Xiaomi-OCR-0 | `transformers`, `torch`, `pillow` | Model weights (~1.6 GB, downloaded on first use) |
+| `all` | Everything | vision + paddle + xiaomi | vision + paddle + Xiaomi model |
 
 The Python package `mcp-ocr[paddleocr-vl]` installs only the subprocess wrapper — not the CLI itself.
 
@@ -100,108 +100,64 @@ The `setupCommands` field (added in pi-mcp-bridge) runs before the server starts
 
 ### Quick comparison
 
-|  | Vision | Paddle | PaddleOCR-VL |
-|------|--------|--------|-------------|
-| **Speed** | ⚡ Instant | 🐢 30–90s | 🐢 2–7s (base) / 150s (dynamic) |
-| **Accuracy** | ★★★★ | ★★★ | ★★ (Cyrillic: ★) |
-| **Languages** | CJK + major European | 80+ languages | Claims 109, poor Cyrillic |
-| **Platform** | macOS 10.15+ | Cross-platform | macOS 14+, Apple Silicon |
-| **RAM usage** | ~50 MB | ~2.5 GB | ~100 MB (CLI) / 2.5 GB (Python lib) |
-| **GPU** | ANE/GPU | CPU only | Apple Silicon GPU |
-| **Install** | `pip install mcp-ocr[vision]` | `pip install mcp-ocr[paddle]` | `brew install paddleocr-vl` |
-| **First run** | Zero | Downloads models (1–2 GB) | Downloads models (1.8 GB) |
-| **Text** | ✅ | ✅ | ⚠️ Fast but inaccurate for non-CJK |
-| **Layout** | ✅ | ✅ | ⚠️ Same as text |
-| **Table** | ✅ | ✅ | ⚠️ Experimental |
-| **Formula** | ❌ | ❌ | ❌ (upstream hang) |
-| **Chart** | ❌ | ❌ | ❌ (upstream hang) |
+|  | Vision | Paddle | Xiaomi-OCR-0 |
+|------|--------|--------|--------------|
+| **Speed** | ⚡ <100 ms | 🐢 30–90 s | 🐢 2–18 s (after warm-up) |
+| **Accuracy** | ★★★★ (Latin/CJK) | ★★★ | ★★★★ (document structure) |
+| **Languages** | ~30 locales (CJK, Latin, Cyrillic, Arabic) | 100+ | empirically RU/EN/DE/JA; weak AR/KO |
+| **Platform** | macOS 10.15+ | Cross-platform CPU | Apple Silicon (MPS), CUDA, CPU |
+| **RAM usage** | ~50 MB | ~2.5 GB | ~2–3 GB (0.8B fp16) |
+| **Install** | `mcp-ocr[vision]` | `mcp-ocr[paddle]` | `mcp-ocr[xiaomi]` |
+| **First run** | Zero | Downloads models (1–2 GB) | Downloads model (~1.6 GB) |
+| **Text** | ✅ | ✅ | ✅ |
+| **Layout** | ✅ | ✅ | ✅ (blocks; no boxes) |
+| **Table** | ❌ (no structure API) | ✅ (`PPStructureV3`) | ✅ OTSL → HTML + CSV |
+| **Formula** | ❌ | ❌ | ✅ LaTeX |
+| **Document → Markdown** | ❌ | ❌ | ✅ (tables + formulas inline) |
+| **KIE → JSON** | ❌ | ❌ | ✅ |
 
-**Recommendation**: Use **Vision** for everyday OCR. It's instant, accurate for European languages, and has zero dependencies on macOS. Use PaddleOCR-VL only for CJK text where Vision falls short. Avoid Paddle (Python) backend — it loads 2.5 GB of C++ libraries for comparable results.
+**Recommendation**: **Vision** for fast everyday text (and the best Cyrillic on macOS).
+**Xiaomi-OCR-0** when you need document structure — tables, formulas, full-page
+Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
+
+> **Note on Vision tables:** Apple exposes table parsing only through
+> `VNRecognizeDocumentsRequest`, which the pinned pyobjc build does not provide.
+> `ocr_table_vision` therefore reports `EUNSUPPORTED` and points at Xiaomi/Paddle
+> instead of returning text labeled as a table.
 
 ### Vision (`ocr_text_vision`, `ocr_layout_vision`, `ocr_table_vision`)
 - macOS 10.15+, zero install
 - GPU/ANE accelerated
+- **`mode` defaults to `accurate`** — the `fast` recognizer is Latin-only and will
+  transliterate Cyrillic/CJK, so only opt into it for quick Latin scans
 - Best for: CJK + major European languages, fast extraction
 
 ### Paddle (`ocr_text_paddle`, `ocr_layout_paddle`, `ocr_table_paddle`)
 - Cross-platform CPU
-- Mature PaddleOCR models
+- Mature PaddleOCR models, `lang=` picks the script family (e.g. `ru`, `ch`, `japan`)
+- Table extraction uses the PaddleOCR 3.x `PPStructureV3` pipeline
 - Best for: wide language coverage, when not on macOS
 
-### PaddleOCR-VL (`ocr_text_paddleocr_vl`, `ocr_layout_paddleocr_vl`, `ocr_table_paddleocr_vl`)
-- macOS 14+, Apple Silicon (M1/M2/M3/M4)
-- 0.9B vision-language model, 109 languages (Cyrillic quality is poor)
-- **Default mode is `base`** (fast, ~2–7s). `dynamic` mode is 20× slower and produces garbled output
-- **Formula and chart tasks disabled** — the CLI hangs on these (upstream bug)
-- Model downloads 1.8 GB on first run; subsequent runs use cache
-- Best for: CJK text, when Vision is not available
-
-## Installing PaddleOCR-VL CLI
-
-> **⚠️ The CLI has known build issues.** `swift build` alone is not enough.
-> You must compile Metal shaders and download model weights manually.
-
-### 1. Clone and build the CLI
-
-```bash
-git clone https://github.com/mlx-community/paddleocr-vl.swift
-cd paddleocr-vl.swift
-swift build -c release
-```
-
-### 2. Compile Metal shaders (metallib)
-
-`swift build` does not compile `.metal` files. Without this step the CLI crashes
-with `Failed to load the default metallib`.
-
-```bash
-cd .build/checkouts/mlx-swift/Source/Cmlx/mlx-c
-mkdir -p build && cd build
-cmake .. -G Ninja && ninja
-
-# Copy the compiled metallib next to the binary
-cp build/_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib \
-  /path/to/paddleocr-vl.swift/.build/release/default.metallib
-```
-
-### 3. Download model weights
-
-The CLI's built-in downloader silently fails — model loads but produces garbled output.
-Download weights manually via Python:
-
-```bash
-pip install huggingface_hub
-python3 -c "
-from huggingface_hub import snapshot_download
-snapshot_download(
-    'PaddlePaddle/PaddleOCR-VL',
-    local_dir='\$HOME/.cache/paddleocr-vl-model',
-    local_dir_use_symlinks=False,
-)
-"
-```
-
-### 4. Verify
-
-```bash
-paddleocr-vl ocr /path/to/image.png --model ~/.cache/paddleocr-vl-model
-```
-
-### 5. Set environment variable
-
-```bash
-export PADDLEOCR_VL_MODEL="$HOME/.cache/paddleocr-vl-model"
-```
-
-The MCP server reads this env var and passes `--model` to the CLI automatically.
+### Xiaomi-OCR-0 (`ocr_document_xiaomi`, `ocr_table_xiaomi`, `ocr_formula_xiaomi`, `ocr_kie_xiaomi`, `ocr_text_xiaomi`, `ocr_layout_xiaomi`)
+- 0.8B document-parsing VLM ([xiaomi-research/Xiaomi-OCR-0](https://github.com/xiaomi-research/Xiaomi-OCR-0),
+  Apache-2.0), served locally via `transformers` on MPS/CUDA/CPU
+- `ocr_document_xiaomi` → Markdown with HTML tables and LaTeX formulas
+- `ocr_table_xiaomi` → `headers` / `rows` / `csv` / `html` (OTSL parsed by the server)
+- `ocr_kie_xiaomi` → JSON; pass `fields` to narrow the schema
+- `ocr_formula_xiaomi` → LaTeX
+- No language parameter: it transcribes the document's own language. Measured
+  character error rate 0.00 on printed Russian (including a degraded photo) and
+  English/German/Japanese; Arabic and Korean are unreliable
+- Model is loaded lazily on first call, so server start stays instant
+- First call downloads ~1.6 GB; generation speed depends on device
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PADDLEOCR_VL_BIN` | `paddleocr-vl` | Path to paddleocr-vl CLI binary |
-| `PADDLEOCR_VL_TIMEOUT` | `120` | Timeout in seconds for PaddleOCR-VL |
-| `PADDLEOCR_VL_MODEL` | (none) | Path to downloaded model weights (required) |
+| `XIAOMI_OCR_MODEL` | `xiaomi-research/Xiaomi-OCR-0` | Model id or local directory |
+| `XIAOMI_OCR_DEVICE` | auto (`mps` → `cuda` → `cpu`) | Torch device |
+| `XIAOMI_OCR_MAX_TOKENS` | `4096` | Generation budget per request |
 
 ## Development
 
@@ -211,3 +167,6 @@ cd mcp_ocr
 pip install -e .[all]
 pytest
 ```
+
+Most Xiaomi-OCR-0 tests inject a stub generator, so they run without `torch` or the
+model weights; only the end-to-end test that calls the real model needs `[xiaomi]`.
