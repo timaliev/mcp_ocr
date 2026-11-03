@@ -1,9 +1,12 @@
 """PaddleOCR backend (cross-platform CPU)."""
 
+import csv
+import io
 import os
 import logging
 from mcp_ocr.backends.base import BaseOCRBackend, ErrorCode
 from mcp_ocr.backends.lang import resolve_lang_code
+from mcp_ocr.html_table import parse_html_table
 
 logger = logging.getLogger("mcp-ocr.paddle")
 
@@ -23,6 +26,40 @@ def _get_paddle(lang: str):
             raise RuntimeError("PaddleOCR not installed.") from None
         _paddle_cache[lang] = PaddleOCR(lang=lang)
     return _paddle_cache[lang]
+
+
+def _collect_pred_html(value, depth: int = 0) -> list[str]:
+    """Collect every ``pred_html`` string inside a PaddleX result tree."""
+    if depth > 8:
+        return []
+    payload = getattr(value, "json", None)
+    if payload is not None:
+        # PaddleX exposes ``json`` as a property; tolerate a callable too.
+        return _collect_pred_html(payload() if callable(payload) else payload, depth + 1)
+    if isinstance(value, dict):
+        found = []
+        for key, item in value.items():
+            if key == "pred_html" and isinstance(item, str):
+                found.append(item)
+            else:
+                found.extend(_collect_pred_html(item, depth + 1))
+        return found
+    if isinstance(value, (list, tuple)):
+        found = []
+        for item in value:
+            found.extend(_collect_pred_html(item, depth + 1))
+        return found
+    return []
+
+
+def _table_record(rows: list[list[str]]) -> dict:
+    buffer = io.StringIO()
+    csv.writer(buffer).writerows(rows)
+    return {
+        "csv": buffer.getvalue().strip(),
+        "headers": rows[0] if rows else [],
+        "rows": rows[1:] if len(rows) > 1 else [],
+    }
 
 
 class PaddleBackend(BaseOCRBackend):
@@ -75,40 +112,31 @@ class PaddleBackend(BaseOCRBackend):
         return {"success": True, "blocks": blocks}
 
     def table(self, path: str) -> dict:
+        """Extract table structure with PaddleOCR 3.x ``PPStructureV3``."""
         if not os.path.isfile(path):
             return {"success": False, "error": ErrorCode.ENOENT,
                     "detail": f"File not found: {path}"}
 
         try:
-            from paddleocr import PPStructure
-            engine = PPStructure()
-            result = engine.predict(path)
-
-            tables = []
-            for page in result:
-                for item in page:
-                    if hasattr(item, 'get') and item.get("type") == "table":
-                        cells = item.get("res", {}).get("cells", [])
-                        if cells:
-                            max_row = max(c[4] for c in cells)
-                            max_col = max(c[5] for c in cells)
-                            grid = [[""] * (max_col + 1) for _ in range(max_row + 1)]
-                            for cell in cells:
-                                grid[cell[4]][cell[5]] = cell.get("text", "")
-                            import csv as _csv
-                            import io
-                            buf = io.StringIO()
-                            writer = _csv.writer(buf)
-                            writer.writerows(grid)
-                            tables.append({
-                                "csv": buf.getvalue().strip(),
-                                "headers": grid[0] if grid else [],
-                                "rows": grid[1:] if len(grid) > 1 else [],
-                            })
-            return {"success": True, "tables": tables}
+            from paddleocr import PPStructureV3
         except ImportError:
-            return {"success": False, "error": ErrorCode.EUNSUPPORTED,
-                    "detail": "PPStructure not available."}
+            return {
+                "success": False,
+                "error": ErrorCode.EUNSUPPORTED,
+                "detail": (
+                    "Table extraction requires PaddleOCR>=3.0 (PPStructureV3). "
+                    "Upgrade with: uv pip install -U paddleocr"
+                ),
+            }
+
+        try:
+            engine = PPStructureV3()
+            predictions = engine.predict(path)
+            tables = [
+                _table_record(parse_html_table(html))
+                for html in _collect_pred_html(predictions)
+            ]
+            return {"success": True, "tables": [t for t in tables if t["headers"] or t["rows"]]}
         except Exception as e:
             logger.exception("PaddleOCR table extraction failed")
             return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}

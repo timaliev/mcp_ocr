@@ -12,8 +12,7 @@
 |---------|------|--------|------|----------------|-------|
 | **Vision** | `ocr_text` | ✅ Pass | <100ms | Perfect | All text captured, Russian + English correct |
 | **Vision** | `ocr_layout` | ✅ Pass | <100ms | Perfect | Bounding boxes accurate, text order correct |
-| **PaddleOCR-VL** | `ocr_text` | ❌ Fail | 2.77s (inference) | Garbled | Model weights not downloaded — garbled output |
-| **PaddleOCR-VL** | `ocr_text` (MCP) | ❌ Fail | N/A | N/A | Mode parameter bug: `accurate` not valid |
+| **Xiaomi-OCR-0** | `document`/`table` | ✅ Pass | 2–18s | Perfect on clean text | See 2026-11-03 measurements below |
 
 ---
 
@@ -46,53 +45,74 @@ root@WGOL-IT00000459:/home/.../chernouhov-ay# rm .copy_fail.py
 
 ---
 
-## PaddleOCR-VL Issues Summary
+## PaddleOCR-VL — removed (2026-11-03)
 
-| Issue | Status | Fix |
-|-------|--------|-----|
-| Metal shaders (metallib) missing | ✅ Fixed | Built MLX C library with cmake, copied `mlx.metallib` |
-| Model weights not downloaded | ❌ Open | HF download pipeline broken; need manual download or Python `huggingface_hub` |
-| Mode parameter `accurate` not valid | ❌ Open | Add mode mapping in backend (`accurate`→`dynamic`, `fast`→`base`) |
-
----
+The backend was removed from this project. On Apple Silicon it required a hand-built
+Swift/MLX CLI, hung for minutes on table requests (and on formula/chart by design),
+loaded several GB per invocation, and produced poor Cyrillic — it never became usable.
+Use **Xiaomi-OCR-0** for structured document output and **Vision** for fast text.
+Historical notes are in the `docs/research/` report and in git history.
 
 ## Cross-Platform Theoretical Comparison
 
 Based on published benchmarks and framework analysis (not yet measured on this hardware):
 
-| Backend | Est. pages/min (M4) | Languages | Tables | Formulas | License |
-|---------|---------------------|-----------|--------|----------|---------|
-| **Vision** | 200+ | ~20 (Latin, CJK, Cyrillic, Arabic) | macOS 15+ only | ❌ | Proprietary (free) |
-| **PaddleOCR-VL (MLX)** | 30-60 | 109 | ✅ MD/HTML | ✅ LaTeX | Apache 2.0 |
-| **Surya (llama.cpp Metal)** | 20-50 | 90+ | ✅ HTML | ✅ KaTeX inline | Code: Apache 2.0, Weights: paid >$5M |
+| Backend | Measured on this hardware | Languages | Tables | Formulas | License |
+|---------|---------------------------|-----------|--------|----------|---------|
+| **Vision** | <100 ms/page | ~30 locales (Latin, CJK, Cyrillic, Arabic) | ❌ no structure API | ❌ | Proprietary (free) |
+| **Xiaomi-OCR-0** (MPS, fp16) | 2.4–18 s/page | RU/EN/DE/JA solid; AR/KO weak | ✅ OTSL→HTML | ✅ LaTeX | Apache 2.0 |
+| **PaddleOCR-VL (MLX)** | removed — unusable | 109 claimed | ⚠️ | ⚠️ | Apache 2.0 |
+| **Surya (llama.cpp Metal)** | 20–50 | 90+ | ✅ HTML | ✅ KaTeX inline | Code: Apache 2.0, Weights: paid >$5M |
 | **Tesseract 5** | ~25 | 100+ | ❌ | ❌ | Apache 2.0 |
-| **EasyOCR (MPS)** | 5-15 | 80+ | ❌ | ❌ | Apache 2.0 |
+| **EasyOCR (MPS)** | 5–15 | 80+ | ❌ | ❌ | Apache 2.0 |
 
-*PaddleOCR-VL and Surya estimates extrapolated from A100 benchmarks and 3× MLX speedup ratio. Pending real measurement once model download is fixed.*
+*Vision, Xiaomi and Paddle numbers are measured on this machine; Surya/Tesseract/EasyOCR
+are estimates from published benchmarks.*
+
+---
+
+## 2026-11-03 — Xiaomi-OCR-0 and Russian (M4, 32 GB, MPS fp16)
+
+Method: synthetic printed samples with ground truth; character error rate (CER) for
+text, exact cell match for tables; four samples degraded (rotate + blur + JPEG q40 +
+downscale) to imitate a phone photo.
+
+| Sample | Backend | Result |
+|--------|---------|--------|
+| Russian paragraph, 270 chars | Xiaomi-OCR-0 | **CER 0.0000** (document and text prompts) |
+| Same paragraph, degraded photo | Xiaomi-OCR-0 | **CER 0.0000** |
+| Russian invoice snippet | Xiaomi-OCR-0 | **CER 0.0000** |
+| Russian paragraph | Vision (`accurate`) | CER 0.0074 (`Nº` for `№`) |
+| Russian paragraph | Vision (default before fix = `fast`) | CER 0.6889 — Latin transliteration |
+| Russian paragraph | Paddle (`lang="ru"`) | CER 0.0037 |
+| Russian table (4×5) | Xiaomi-OCR-0 | **40/40 cells**, correct `headers`/`rows` |
+| English table (4×5) | Xiaomi-OCR-0 | **40/40 cells** |
+| Russian table, degraded photo | Xiaomi-OCR-0 | **40/40 cells** |
+| Full page (heading + prose + table) | Xiaomi-OCR-0 | table 40/40; prose CER 3.0% (one dropped letter) |
+| Full page, degraded photo | Xiaomi-OCR-0 | table 38/40 (two dropped letters, all numbers correct) |
+
+Language probe on clean renders (text prompt, CER):
+`de 0.000`, `ja 0.000`, `el 0.019`, `ko 0.189`, `ar 0.400` — Arabic dropped every
+digit, Korean confused glyphs. The model publishes no supported-language list, so
+treat Russian/Latin/Japanese as "works in practice", not as a guarantee.
+
+Timing: first request 131 s (Metal kernel warm-up), then 2.4–17.5 s per page on M4 MPS
+fp16. Installing `flash-linear-attention` / `causal_conv1d` is reported by
+`transformers` to speed this up further.
 
 ---
 
 ## Recommendations
 
 ### For production use today
-**Apple Vision** is the only backend that works reliably on this hardware. It's fast, zero-install, and handles Russian + English well. Use it for:
-- Terminal screenshots
-- Document photos
-- Mixed Latin/Cyrillic text
-- Quick text extraction
-
-Limitations: no tables (pre-macOS 15), no formulas, limited language coverage.
-
-### When PaddleOCR-VL is fixed
-It will be the best choice for:
-- Multi-language documents (109 languages)
-- Tables and structured data
-- Mathematical formulas
-- Charts and diagrams
-- Highest accuracy requirements
+- **Apple Vision** — fastest, zero install, best Cyrillic on macOS. Default for plain text.
+- **Xiaomi-OCR-0** — the only backend that returns document structure: Markdown, HTML
+  tables, LaTeX formulas, and KIE JSON. Use it for invoices, specifications, reports.
 
 ### PaddleOCR (CPU)
 Use as a cross-platform fallback when:
 - Not on macOS
 - Vision's language support is insufficient
-- PaddleOCR-VL is unavailable
+- You do not want to download the Xiaomi model
+
+Note: Paddle table extraction needs PaddleOCR >= 3.0 (`PPStructureV3`).

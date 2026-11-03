@@ -29,15 +29,6 @@ class VisionBackend(BaseOCRBackend):
     name = "vision"
     tasks = ["text", "layout", "table"]
 
-    def __init__(self):
-        self._has_table_support = False
-        try:
-            import Vision
-            if hasattr(Vision, "VNRecognizeTextRequestRevision4"):
-                self._has_table_support = True
-        except ImportError:
-            pass
-
     def _load_image(self, path: str):
         import Vision
         import Quartz
@@ -65,7 +56,8 @@ class VisionBackend(BaseOCRBackend):
         handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None)
         request = Vision.VNRecognizeTextRequest.alloc().init()
 
-        if mode == "fast":
+        fast = mode == "fast"
+        if fast:
             rev = (Vision.VNRecognizeTextRequestRevision2
                    if hasattr(Vision, "VNRecognizeTextRequestRevision2")
                    else Vision.VNRecognizeTextRequestRevision1)
@@ -76,9 +68,12 @@ class VisionBackend(BaseOCRBackend):
                    if hasattr(Vision, "VNRecognizeTextRequestRevision2")
                    else Vision.VNRecognizeTextRequestRevision1)
         request.setRevision_(rev)
+        # Only the accurate recognizer supports non-Latin scripts; the fast
+        # recognizer reports just a handful of Latin languages, so treating any
+        # unknown mode as "fast" silently breaks Cyrillic, CJK and Greek.
         request.setRecognitionLevel_(
-            Vision.VNRequestTextRecognitionLevelAccurate if mode == "accurate"
-            else Vision.VNRequestTextRecognitionLevelFast
+            Vision.VNRequestTextRecognitionLevelFast if fast
+            else Vision.VNRequestTextRecognitionLevelAccurate
         )
         request.setUsesLanguageCorrection_(True)
         request.setRecognitionLanguages_(_resolve_vision_langs(lang))
@@ -136,32 +131,22 @@ class VisionBackend(BaseOCRBackend):
         return {"success": True, "blocks": blocks}
 
     def table(self, path: str, lang: str | None = None, mode: str = "accurate") -> dict:
-        if not self._has_table_support:
-            return {"success": False, "error": ErrorCode.EUNSUPPORTED,
-                    "detail": "Table detection requires macOS 15+ (use ocr_text_vision instead)"}
+        """Vision OCR returns text lines only — it cannot recover table structure.
 
-        import Vision, Quartz
-
-        img, err = self._load_image(path)
-        if err:
-            return err
-
-        try:
-            handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None)
-            request = Vision.VNRecognizeTextRequest.alloc().init()
-            request.setRevision_(Vision.VNRecognizeTextRequestRevision4)
-            request.setRecognitionLevel_(
-                Vision.VNRequestTextRecognitionLevelAccurate if mode == "accurate"
-                else Vision.VNRequestTextRecognitionLevelFast
-            )
-            request.setUsesLanguageCorrection_(True)
-            request.setAutomaticallyDetectsTextLanguage_(True)
-            handler.performRequests_error_([request], None)
-
-            tables = []
-            for obs in request.results() or []:
-                text = obs.topCandidates_(1)[0].string()
-                tables.append({"text": text, "csv": "", "headers": [], "rows": []})
-            return {"success": True, "tables": tables}
-        except Exception as e:
-            return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
+        Apple exposes table parsing through ``VNRecognizeDocumentsRequest``, which
+        the pinned pyobjc framework does not provide, so this backend has no honest
+        table implementation. Report that instead of returning text as a "table".
+        """
+        if not os.path.isfile(path):
+            return {"success": False, "error": ErrorCode.ENOENT,
+                    "detail": f"File not found: {path}"}
+        return {
+            "success": False,
+            "error": ErrorCode.EUNSUPPORTED,
+            "detail": (
+                "Apple Vision has no table-structure output in this build: pyobjc "
+                "does not expose VNRecognizeDocumentsRequest. Use ocr_table_xiaomi "
+                "(recommended) or ocr_table_paddle. Upgrade pyobjc-framework-Vision "
+                "to enable it in the future."
+            ),
+        }
