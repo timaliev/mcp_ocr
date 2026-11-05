@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.2](https://github.com/timaliev/mcp_ocr/compare/v1.2.1..v1.2.2) - 2026-11-05
+
+### Bug Fixes
+
+- **(xiaomi)** cap input pixels and reject concurrent inference - ([29f1af8](https://github.com/timaliev/mcp_ocr/commit/29f1af80bf6e2b0d8986ace58910b39b598c031d)) - Tim Aliev
+- **(xiaomi)** unload the model after an idle timeout - ([07e2cb1](https://github.com/timaliev/mcp_ocr/commit/07e2cb1381571881e85eeebee2c55ab008275350)) - Tim Aliev
+---
+
 ## [1.2.1](https://github.com/timaliev/mcp_ocr/compare/v1.2.0..v1.2.1) - 2026-11-05
 
 ### Bug Fixes
