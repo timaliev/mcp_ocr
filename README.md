@@ -55,7 +55,7 @@ Then configure your MCP client to run `mcp-ocr`.
 |-------|---------|-------------|---------------|
 | `vision` | Apple Vision | `pyobjc-framework-vision`, `pyobjc-framework-quartz` | macOS 10.15+ |
 | `paddle` | PaddleOCR | `paddleocr>=3`, `paddlepaddle` (~2.5 GB) | Nothing |
-| `xiaomi` | Xiaomi-OCR-0 | `transformers`, `torch`, `pillow` | Model weights (~1.6 GB, downloaded on first use) |
+| `xiaomi` | Xiaomi-OCR-0 | `transformers`, `torch`, `torchvision`, `pillow` | Model weights (~1.6 GB, downloaded on first use) |
 | `all` | Everything | vision + paddle + xiaomi | vision + paddle + Xiaomi model |
 
 The Python package `mcp-ocr[paddleocr-vl]` installs only the subprocess wrapper — not the CLI itself.
@@ -140,7 +140,7 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 
 ### Xiaomi-OCR-0 (`ocr_document_xiaomi`, `ocr_table_xiaomi`, `ocr_formula_xiaomi`, `ocr_kie_xiaomi`, `ocr_text_xiaomi`, `ocr_layout_xiaomi`)
 - 0.8B document-parsing VLM ([xiaomi-research/Xiaomi-OCR-0](https://github.com/xiaomi-research/Xiaomi-OCR-0),
-  Apache-2.0), served locally via `transformers` on MPS/CUDA/CPU
+  Apache-2.0), served locally via `transformers` on MPS/CUDA/CPU (`torchvision` is required by the Qwen3-VL image processor)
 - `ocr_document_xiaomi` → Markdown with HTML tables and LaTeX formulas
 - `ocr_table_xiaomi` → `headers` / `rows` / `csv` / `html` (OTSL parsed by the server)
 - `ocr_kie_xiaomi` → JSON; pass `fields` to narrow the schema
