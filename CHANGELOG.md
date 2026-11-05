@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1](https://github.com/timaliev/mcp_ocr/compare/v1.2.0..v1.2.1) - 2026-11-05
+
+### Bug Fixes
+
+- **(xiaomi)** require torchvision in the xiaomi extra - ([a94e2cc](https://github.com/timaliev/mcp_ocr/commit/a94e2cc52d10947c875448f7bdf284b5702451f2)) - Tim Aliev
+- **(xiaomi)** return EWARMING while the model downloads in the background - ([9913496](https://github.com/timaliev/mcp_ocr/commit/9913496fd1355b5d03fe8d4007b1d3a70bcd87cf)) - Tim Aliev
+---
+
 ## [1.2.0](https://github.com/timaliev/mcp_ocr/compare/v1.1.0..v1.2.0) - 2026-11-03
 
 ### Features
