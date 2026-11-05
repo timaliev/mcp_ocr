@@ -155,6 +155,10 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
   otherwise costs ~8.6k tokens and a single call takes ~40 s
 - **One request at a time**: a second concurrent call returns `EBUSY` immediately
   instead of competing for the single MPS device — retry it in a few seconds
+- **Idle unload**: the ~3 GB model is released after `XIAOMI_OCR_IDLE_UNLOAD` seconds
+  without requests (default 300), so an idle agent session does not hold it. The next
+  call reloads it in ~3–8 s. `0` unloads after every request, `-1` keeps it resident
+  for the process lifetime
 - **First call returns `EWARMING` instead of blocking**: the ~1.75 GB checkpoint
   downloads in a background thread (progress is reported in the reply). Repeat the
   call in a minute; once the download is complete the model loads (~20–30 s) and the
@@ -171,6 +175,7 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 | `XIAOMI_OCR_MAX_TOKENS` | `4096` | Generation budget per request |
 | `XIAOMI_OCR_EXPECTED_BYTES` | `1800000000` | Expected checkpoint size, used for EWARMING progress |
 | `XIAOMI_OCR_MAX_PIXELS` | `4000000` | Downscale input images above this pixel count (0 disables scaling) |
+| `XIAOMI_OCR_IDLE_UNLOAD` | `300` | Seconds without requests before the model is unloaded (0 = after every request, -1 = never) |
 
 ## Development
 
