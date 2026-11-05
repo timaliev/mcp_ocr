@@ -12,6 +12,7 @@ class ErrorCode(StrEnum):
     EPROCESSING = "EPROCESSING"    # unexpected failure during OCR
     ETIMEOUT = "ETIMEOUT"          # subprocess timeout
     ECONFIG = "ECONFIG"            # binary not found, config wrong
+    EWARMING = "EWARMING"          # model is downloading; retry shortly
 
 
 class BaseOCRBackend(ABC):

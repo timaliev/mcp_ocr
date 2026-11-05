@@ -1,6 +1,6 @@
 [project]
 name = "mcp-ocr"
-version = "1.2.0"
+version = "1.2.1"
 description = "Modular OCR MCP server with Vision, PaddleOCR, and Xiaomi-OCR-0 backends"
 requires-python = ">=3.11,<3.14"
 dependencies = [
@@ -10,7 +10,7 @@ dependencies = [
 [project.optional-dependencies]
 vision = ["pyobjc-framework-Vision", "pyobjc-framework-Quartz"]
 paddle = ["paddleocr>=3.0", "paddlepaddle>=3.3.1"]
-xiaomi = ["transformers>=5.17", "torch>=2.6", "pillow"]
+xiaomi = ["transformers>=5.17", "torch>=2.6", "torchvision>=0.21", "pillow"]
 all = [
     "mcp-ocr[vision,paddle,xiaomi]",
 ]
