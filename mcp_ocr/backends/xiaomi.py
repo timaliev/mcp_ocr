@@ -15,6 +15,7 @@ Environment:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import threading
@@ -40,6 +41,23 @@ _FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
 
 # Approximate download size, used only to render progress in EWARMING replies.
 EXPECTED_DOWNLOAD_BYTES = int(os.environ.get("XIAOMI_OCR_EXPECTED_BYTES", "1800000000"))
+
+# Input cap: the processor maps every 32x32 pixel block to one vision token, so a
+# 300 DPI A4 page (3507x2480) becomes ~8.6k tokens and a single call takes ~40 s.
+# 4 MP keeps a dense page legible at ~3.9k tokens and well inside a 60 s budget.
+MAX_IMAGE_PIXELS = int(os.environ.get("XIAOMI_OCR_MAX_PIXELS", "4000000"))
+
+# One model instance per process — only one request may use it at a time.
+_INFERENCE_LOCK = threading.Lock()
+
+
+def fit_dimensions(width: int, height: int, max_pixels: int | None = None) -> tuple[int, int]:
+    """Downscale to at most ``max_pixels`` total pixels, preserving aspect ratio."""
+    limit = MAX_IMAGE_PIXELS if max_pixels is None else max_pixels
+    if limit <= 0 or width <= 0 or height <= 0 or width * height <= limit:
+        return width, height
+    scale = math.sqrt(limit / (width * height))
+    return max(1, int(width * scale)), max(1, int(height * scale))
 _DOWNLOAD_PATTERNS = ["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model", "*.py"]
 
 
@@ -199,6 +217,9 @@ class _Runtime:
         from PIL import Image
 
         image = Image.open(path).convert("RGB")
+        width, height = fit_dimensions(*image.size)
+        if (width, height) != image.size:
+            image = image.resize((width, height), Image.LANCZOS)
         messages = [
             {
                 "role": "user",
@@ -281,6 +302,15 @@ class XiaomiBackend(BaseOCRBackend):
                 "state": status.get("state"),
                 "progress": status.get("progress"),
             }
+        if not _INFERENCE_LOCK.acquire(blocking=False):
+            return {
+                "success": False,
+                "error": ErrorCode.EBUSY,
+                "detail": (
+                    "Xiaomi-OCR-0 is busy with another page. Retry in a few seconds; "
+                    "pages are processed one at a time on this machine."
+                ),
+            }
         try:
             return self._generator(path, prompt, max_tokens)
         except ImportError as exc:
@@ -299,6 +329,8 @@ class XiaomiBackend(BaseOCRBackend):
                 "error": ErrorCode.EPROCESSING,
                 "detail": f"Xiaomi-OCR-0 inference failed: {exc}",
             }
+        finally:
+            _INFERENCE_LOCK.release()
 
     @staticmethod
     def _lines(text: str) -> list[dict]:
