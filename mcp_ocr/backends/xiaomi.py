@@ -14,10 +14,13 @@ Environment:
 
 from __future__ import annotations
 
+import gc
 import json
+import math
 import os
 import re
 import threading
+import time
 
 from mcp_ocr.backends.base import BaseOCRBackend, ErrorCode
 from mcp_ocr.otsl import markdown_with_html_tables, otsl_to_html, parse_otsl
@@ -40,6 +43,95 @@ _FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
 
 # Approximate download size, used only to render progress in EWARMING replies.
 EXPECTED_DOWNLOAD_BYTES = int(os.environ.get("XIAOMI_OCR_EXPECTED_BYTES", "1800000000"))
+
+# Input cap: the processor maps every 32x32 pixel block to one vision token, so a
+# 300 DPI A4 page (3507x2480) becomes ~8.6k tokens and a single call takes ~40 s.
+# 4 MP keeps a dense page legible at ~3.9k tokens and well inside a 60 s budget.
+MAX_IMAGE_PIXELS = int(os.environ.get("XIAOMI_OCR_MAX_PIXELS", "4000000"))
+
+# One model instance per process — only one request may use it at a time.
+_INFERENCE_LOCK = threading.Lock()
+
+
+def fit_dimensions(width: int, height: int, max_pixels: int | None = None) -> tuple[int, int]:
+    """Downscale to at most ``max_pixels`` total pixels, preserving aspect ratio."""
+    limit = MAX_IMAGE_PIXELS if max_pixels is None else max_pixels
+    if limit <= 0 or width <= 0 or height <= 0 or width * height <= limit:
+        return width, height
+    scale = math.sqrt(limit / (width * height))
+    return max(1, int(width * scale)), max(1, int(height * scale))
+
+# Idle unload: a loaded 0.8B model costs ~3 GB until the process exits. Reclaim it
+# after this many idle seconds. 0 = unload right after every request, -1 = never.
+IDLE_UNLOAD_SECONDS = int(os.environ.get("XIAOMI_OCR_IDLE_UNLOAD", "300"))
+
+
+class IdleUnloadTimer:
+    """Unloads the model after ``timeout`` seconds without a request.
+
+    ``check()`` is deterministic and clock-injectable so it can be tested without
+    sleeping; a watchdog thread calls it in the background while the server runs.
+    """
+
+    def __init__(self, timeout: int, unload, clock=None, interval=None):
+        self.timeout = timeout
+        self._unload = unload
+        self._clock = clock or time.monotonic
+        self._interval = interval if interval is not None else self._default_interval()
+        self._lock = threading.Lock()
+        self._last_activity = None
+        self._thread = None
+        self._stopped = threading.Event()
+
+    def _default_interval(self) -> float:
+        if self.timeout == 0:
+            return 1.0
+        return min(30.0, max(1.0, self.timeout / 4))
+
+    def touch(self) -> None:
+        """Record that a request used the model."""
+        with self._lock:
+            self._last_activity = self._clock()
+
+    def check(self, now=None) -> bool:
+        """Unload when idle past the timeout. Returns True when it unloaded."""
+        with self._lock:
+            last = self._last_activity
+        if self.timeout < 0 or last is None:
+            return False
+        current = self._clock() if now is None else now
+        if self.timeout > 0 and current - last < self.timeout:
+            return False
+        if not self._unload():
+            return False  # inference in flight — retry on the next tick
+        with self._lock:
+            self._last_activity = None
+        return True
+
+    def start(self) -> None:
+        """Start the watchdog once; a no-op while it is already running."""
+        with self._lock:
+            if self.timeout < 0:
+                return
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._stopped.clear()
+            self._thread = threading.Thread(
+                target=self._watch, name="xiaomi-idle-unload", daemon=True
+            )
+            self._thread.start()
+
+    def _watch(self) -> None:
+        while not self._stopped.wait(self._interval):
+            self.check()
+
+    def stop(self) -> None:
+        """Stop the watchdog thread (shutdown and tests)."""
+        self._stopped.set()
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
 _DOWNLOAD_PATTERNS = ["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model", "*.py"]
 
 
@@ -199,6 +291,9 @@ class _Runtime:
         from PIL import Image
 
         image = Image.open(path).convert("RGB")
+        width, height = fit_dimensions(*image.size)
+        if (width, height) != image.size:
+            image = image.resize((width, height), Image.LANCZOS)
         messages = [
             {
                 "role": "user",
@@ -227,6 +322,49 @@ class _Runtime:
         return self.processor.batch_decode(new_tokens, skip_special_tokens=True)[0]
 
 
+def _unload_runtime() -> bool:
+    """Drop the model and return its memory to the OS.
+
+    Returns False when an inference is in flight so the timer can retry later.
+    """
+    if not _INFERENCE_LOCK.acquire(blocking=False):
+        return False
+    try:
+        if _Runtime._instance is None:
+            return True
+        _Runtime._instance = None
+        gc.collect()
+        try:
+            import torch
+
+            torch.mps.synchronize()
+            torch.mps.empty_cache()
+        except Exception:
+            pass
+        gc.collect()
+        return True
+    finally:
+        _INFERENCE_LOCK.release()
+
+
+_IDLE_TIMER = IdleUnloadTimer(IDLE_UNLOAD_SECONDS, _unload_runtime)
+
+
+class _NoopTimer:
+    """Timer for callers that inject their own generator (tests, pipelines)."""
+
+    timeout = 300
+
+    def touch(self) -> None:
+        pass
+
+    def start(self) -> None:
+        pass
+
+    def check(self) -> bool:
+        return False
+
+
 def default_generator(path: str, prompt: str, max_tokens: int) -> str:
     """Run one request against the local model."""
     return _Runtime.get().generate(path, prompt, max_tokens)
@@ -238,7 +376,7 @@ class XiaomiBackend(BaseOCRBackend):
     name = "xiaomi"
     tasks = ["text", "layout", "table", "formula", "document", "kie"]
 
-    def __init__(self, generator=None, warmer=None) -> None:
+    def __init__(self, generator=None, warmer=None, idle_timer=None) -> None:
         self._generator = generator or default_generator
         if warmer is not None:
             self._warmer = warmer
@@ -247,6 +385,12 @@ class XiaomiBackend(BaseOCRBackend):
             self._warmer = _ReadyWarmer()
         else:
             self._warmer = ModelWarmer()
+        if idle_timer is not None:
+            self._idle_timer = idle_timer
+        elif generator is not None:
+            self._idle_timer = _NoopTimer()
+        else:
+            self._idle_timer = _IDLE_TIMER
 
     # -- helpers ---------------------------------------------------------
     def _model_text(self, path: str, prompt: str, max_tokens: int = MAX_TOKENS):
@@ -281,6 +425,15 @@ class XiaomiBackend(BaseOCRBackend):
                 "state": status.get("state"),
                 "progress": status.get("progress"),
             }
+        if not _INFERENCE_LOCK.acquire(blocking=False):
+            return {
+                "success": False,
+                "error": ErrorCode.EBUSY,
+                "detail": (
+                    "Xiaomi-OCR-0 is busy with another page. Retry in a few seconds; "
+                    "pages are processed one at a time on this machine."
+                ),
+            }
         try:
             return self._generator(path, prompt, max_tokens)
         except ImportError as exc:
@@ -299,6 +452,16 @@ class XiaomiBackend(BaseOCRBackend):
                 "error": ErrorCode.EPROCESSING,
                 "detail": f"Xiaomi-OCR-0 inference failed: {exc}",
             }
+        finally:
+            _INFERENCE_LOCK.release()
+            self._note_activity()
+
+    def _note_activity(self) -> None:
+        """Start the idle watchdog and, in immediate mode, unload right away."""
+        self._idle_timer.touch()
+        self._idle_timer.start()
+        if getattr(self._idle_timer, "timeout", 1) == 0:
+            self._idle_timer.check()
 
     @staticmethod
     def _lines(text: str) -> list[dict]:

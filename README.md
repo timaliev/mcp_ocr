@@ -148,7 +148,17 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 - No language parameter: it transcribes the document's own language. Measured
   character error rate 0.00 on printed Russian (including a degraded photo) and
   English/German/Japanese; Arabic and Korean are unreliable
-- Model is loaded lazily, so server start stays instant
+- Model is loaded lazily, so server start stays instant; **it is loaded once per server
+  process** (~3 GB resident) and every later page reuses it
+- Input is downscaled to at most `XIAOMI_OCR_MAX_PIXELS` (default 4 MP) before inference:
+  every 32×32 pixel block becomes one vision token, so a 300 DPI A4 page (3507×2480)
+  otherwise costs ~8.6k tokens and a single call takes ~40 s
+- **One request at a time**: a second concurrent call returns `EBUSY` immediately
+  instead of competing for the single MPS device — retry it in a few seconds
+- **Idle unload**: the ~3 GB model is released after `XIAOMI_OCR_IDLE_UNLOAD` seconds
+  without requests (default 300), so an idle agent session does not hold it. The next
+  call reloads it in ~3–8 s. `0` unloads after every request, `-1` keeps it resident
+  for the process lifetime
 - **First call returns `EWARMING` instead of blocking**: the ~1.75 GB checkpoint
   downloads in a background thread (progress is reported in the reply). Repeat the
   call in a minute; once the download is complete the model loads (~20–30 s) and the
@@ -164,6 +174,8 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 | `XIAOMI_OCR_DEVICE` | auto (`mps` → `cuda` → `cpu`) | Torch device |
 | `XIAOMI_OCR_MAX_TOKENS` | `4096` | Generation budget per request |
 | `XIAOMI_OCR_EXPECTED_BYTES` | `1800000000` | Expected checkpoint size, used for EWARMING progress |
+| `XIAOMI_OCR_MAX_PIXELS` | `4000000` | Downscale input images above this pixel count (0 disables scaling) |
+| `XIAOMI_OCR_IDLE_UNLOAD` | `300` | Seconds without requests before the model is unloaded (0 = after every request, -1 = never) |
 
 ## Development
 

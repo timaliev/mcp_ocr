@@ -13,6 +13,7 @@ class ErrorCode(StrEnum):
     ETIMEOUT = "ETIMEOUT"          # subprocess timeout
     ECONFIG = "ECONFIG"            # binary not found, config wrong
     EWARMING = "EWARMING"          # model is downloading; retry shortly
+    EBUSY = "EBUSY"                # model busy with another request; retry shortly
 
 
 class BaseOCRBackend(ABC):
