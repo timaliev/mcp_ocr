@@ -148,8 +148,13 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 - No language parameter: it transcribes the document's own language. Measured
   character error rate 0.00 on printed Russian (including a degraded photo) and
   English/German/Japanese; Arabic and Korean are unreliable
-- Model is loaded lazily on first call, so server start stays instant
-- First call downloads ~1.6 GB; generation speed depends on device
+- Model is loaded lazily, so server start stays instant
+- **First call returns `EWARMING` instead of blocking**: the ~1.75 GB checkpoint
+  downloads in a background thread (progress is reported in the reply). Repeat the
+  call in a minute; once the download is complete the model loads (~20–30 s) and the
+  request runs. This keeps a cold start inside the MCP tool-call timeout
+- A failed download is reported as `EPROCESSING` with the underlying error; if the
+  hub is unreachable, point `XIAOMI_OCR_MODEL` at a local checkpoint directory
 
 ## Environment Variables
 
@@ -158,6 +163,7 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 | `XIAOMI_OCR_MODEL` | `xiaomi-research/Xiaomi-OCR-0` | Model id or local directory |
 | `XIAOMI_OCR_DEVICE` | auto (`mps` → `cuda` → `cpu`) | Torch device |
 | `XIAOMI_OCR_MAX_TOKENS` | `4096` | Generation budget per request |
+| `XIAOMI_OCR_EXPECTED_BYTES` | `1800000000` | Expected checkpoint size, used for EWARMING progress |
 
 ## Development
 
