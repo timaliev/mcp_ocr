@@ -1,21 +1,45 @@
 """MCP server for OCR — modular backend architecture."""
 
+import asyncio
 import os
 import sys
 import logging
 import functools
 import inspect
+import time
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.context import Context
 
 from mcp_ocr.backends import BACKENDS, get_backend, ErrorCode
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger("mcp-ocr")
 
+# Long pages can take far longer than a client's per-request timeout (a dense
+# 58-row table takes ~60 s to decode). Clients that ask for progress reset that
+# timeout on every notification, so report elapsed time while the backend runs.
+PROGRESS_INTERVAL = float(os.environ.get("MCP_OCR_PROGRESS_INTERVAL", "5"))
+
 
 def handle_errors(func):
     """Decorator that catches exceptions and returns structured error dicts."""
+    if inspect.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except FileNotFoundError as e:
+                return {"success": False, "error": ErrorCode.ENOENT, "detail": str(e)}
+            except ImportError as e:
+                return {"success": False, "error": ErrorCode.EUNSUPPORTED, "detail": str(e)}
+            except Exception as e:
+                logger.exception("Tool failed")
+                return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
+
+        return async_wrapper
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -27,7 +51,44 @@ def handle_errors(func):
         except Exception as e:
             logger.exception("Tool failed")
             return {"success": False, "error": ErrorCode.EPROCESSING, "detail": str(e)}
+
     return wrapper
+
+
+def _consume_task_result(task) -> None:
+    """Swallow the result/exception of an inference that outlived its request."""
+    try:
+        task.exception()
+    except Exception:
+        pass
+
+
+async def _run_with_progress(method, kwargs: dict, ctx: Context | None):
+    """Run a blocking backend method in a thread, reporting progress meanwhile."""
+    if ctx is None:
+        return await asyncio.to_thread(method, **kwargs)
+
+    task = asyncio.create_task(asyncio.to_thread(method, **kwargs))
+    started = time.monotonic()
+    try:
+        while True:
+            done, _ = await asyncio.wait({task}, timeout=PROGRESS_INTERVAL)
+            if task in done:
+                return task.result()
+            elapsed = time.monotonic() - started
+            try:
+                await ctx.report_progress(
+                    elapsed, None, f"OCR running ({elapsed:.0f}s)"
+                )
+            except Exception:
+                logger.debug("progress notification failed", exc_info=True)
+    except asyncio.CancelledError:
+        if not task.done():
+            # torch inference cannot be interrupted; let it finish and free the
+            # model lock so a retry does not sit in EBUSY forever.
+            task.add_done_callback(_consume_task_result)
+            logger.info("request cancelled — inference continues in background")
+        raise
 
 
 _BACKEND_DESCRIPTIONS = {
@@ -93,7 +154,12 @@ def _split_fields(fields):
 
 
 def _make_tool_fn(method):
-    """Create a tool function exposing only the parameters ``method`` accepts."""
+    """Create a tool function exposing only the parameters ``method`` accepts.
+
+    Every tool is async so the backend can run in a worker thread while progress
+    notifications keep clients with a per-request timeout alive. ``ctx`` is
+    injected by MCPServer and never appears in the tool's input schema.
+    """
     params = inspect.signature(method).parameters
     has_fields = "fields" in params
     has_lang = "lang" in params
@@ -102,56 +168,90 @@ def _make_tool_fn(method):
     if has_fields:
 
         @handle_errors
-        def tool(path: str, fields: list[str] | None = None) -> dict:
-            return method(path=path, fields=_split_fields(fields))
+        async def tool(
+            path: str,
+            fields: list[str] | None = None,
+            ctx: Context | None = None,
+        ) -> dict:
+            return await _run_with_progress(
+                method, {"path": path, "fields": _split_fields(fields)}, ctx
+            )
 
     elif has_lang and has_mode:
 
         @handle_errors
-        def tool(path: str, lang: str | None = None, mode: str = "accurate") -> dict:
-            return method(path=path, lang=lang, mode=mode)
+        async def tool(
+            path: str,
+            lang: str | None = None,
+            mode: str = "accurate",
+            ctx: Context | None = None,
+        ) -> dict:
+            return await _run_with_progress(
+                method, {"path": path, "lang": lang, "mode": mode}, ctx
+            )
 
     elif has_lang:
 
         @handle_errors
-        def tool(path: str, lang: str | None = None) -> dict:
-            return method(path=path, lang=lang)
+        async def tool(
+            path: str,
+            lang: str | None = None,
+            ctx: Context | None = None,
+        ) -> dict:
+            return await _run_with_progress(
+                method, {"path": path, "lang": lang}, ctx
+            )
 
     elif has_mode:
 
         @handle_errors
-        def tool(path: str, mode: str = "accurate") -> dict:
-            return method(path=path, mode=mode)
+        async def tool(
+            path: str,
+            mode: str = "accurate",
+            ctx: Context | None = None,
+        ) -> dict:
+            return await _run_with_progress(method, {"path": path, "mode": mode}, ctx)
 
     else:
 
         @handle_errors
-        def tool(path: str) -> dict:
-            return method(path=path)
+        async def tool(path: str, ctx: Context | None = None) -> dict:
+            return await _run_with_progress(method, {"path": path}, ctx)
 
     return tool
 
 
 def _make_batch_fn(method):
-    """Create a batch tool function that delegates to a backend method."""
+    """Create a batch tool that runs pages one at a time and reports per page."""
     params = inspect.signature(method).parameters
     has_lang = "lang" in params
     has_mode = "mode" in params
 
     @handle_errors
-    def batch_tool(paths: list[str], lang: str | None = None, mode: str = "accurate") -> dict:
+    async def batch_tool(
+        paths: list[str],
+        lang: str | None = None,
+        mode: str = "accurate",
+        ctx: Context | None = None,
+    ) -> dict:
         results = []
-        for p in paths:
-            kwargs = {"path": p}
+        total = len(paths)
+        for index, path in enumerate(paths):
+            if ctx is not None:
+                try:
+                    await ctx.report_progress(index, total, f"page {index + 1}/{total}")
+                except Exception:
+                    logger.debug("progress notification failed", exc_info=True)
+            kwargs = {"path": path}
             if has_lang:
                 kwargs["lang"] = lang
             if has_mode:
                 kwargs["mode"] = mode
             try:
-                r = method(**kwargs)
+                result = await asyncio.to_thread(method, **kwargs)
             except Exception as e:
-                r = {"success": False, "error": "EPROCESSING", "detail": str(e)}
-            results.append({"path": p, **r})
+                result = {"success": False, "error": "EPROCESSING", "detail": str(e)}
+            results.append({"path": path, **result})
         return {"success": True, "results": results}
 
     return batch_tool

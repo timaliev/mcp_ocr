@@ -166,6 +166,16 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 - A failed download is reported as `EPROCESSING` with the underlying error; if the
   hub is unreachable, point `XIAOMI_OCR_MODEL` at a local checkpoint directory
 
+## Long-running calls (progress notifications)
+
+A dense page can take longer than a client's per-request timeout (a 58-row table
+takes ~60 s to decode). The server reports MCP progress every
+`MCP_OCR_PROGRESS_INTERVAL` seconds while a backend call runs; clients that reset
+their timeout on progress (Pi, and most progress-aware clients) keep the call alive
+and show the elapsed time. Batch tools report per-page progress. Clients that do not
+request progress (DSH today) are unaffected — for those, raise the client's
+per-request timeout instead (e.g. `toolCallTimeoutMs` for the DSH MCP client).
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -176,6 +186,7 @@ Markdown, or key-field JSON. **Paddle** as a cross-platform fallback.
 | `XIAOMI_OCR_EXPECTED_BYTES` | `1800000000` | Expected checkpoint size, used for EWARMING progress |
 | `XIAOMI_OCR_MAX_PIXELS` | `4000000` | Downscale input images above this pixel count (0 disables scaling) |
 | `XIAOMI_OCR_IDLE_UNLOAD` | `300` | Seconds without requests before the model is unloaded (0 = after every request, -1 = never) |
+| `MCP_OCR_PROGRESS_INTERVAL` | `5` | Seconds between MCP progress notifications during a long call |
 
 ## Development
 

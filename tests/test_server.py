@@ -119,7 +119,7 @@ def test_batch_tool_forwards_supported_arguments_only():
             return {"success": True, "text": path}
 
     batch = _make_batch_fn(PathOnly().extract)
-    result = batch(["a.png", "b.png"], lang="russian", mode="base")
+    result = asyncio.run(batch(["a.png", "b.png"], lang="russian", mode="base"))
 
     assert result["success"] is True
     assert [item["text"] for item in result["results"]] == ["a.png", "b.png"]
