@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.3](https://github.com/timaliev/mcp_ocr/compare/v1.2.2..v1.2.3) - 2026-11-09
+
+### Bug Fixes
+
+- **(mcp)** report progress during long OCR calls - ([478e390](https://github.com/timaliev/mcp_ocr/commit/478e390d1104c8fb019c6759ed9200512ec5f002)) - Tim Aliev
+---
+
 ## [1.2.2](https://github.com/timaliev/mcp_ocr/compare/v1.2.1..v1.2.2) - 2026-11-05
 
 ### Bug Fixes
